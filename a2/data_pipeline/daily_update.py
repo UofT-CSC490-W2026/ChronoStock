@@ -21,33 +21,6 @@ TICKERS = [
 API_KEY = "TFaAars11adlxu1WZPyGIstSSo3ySAqB"
 DATA_DIR = "stock_data"
 
-def update_csv(new_df, filename, id_col=None, sort_col=None):
-    """Helper to append new data to existing CSV with deduplication."""
-    if new_df.empty:
-        print(f"No new data for {filename}")
-        return
-
-    path = os.path.join(DATA_DIR, filename)
-    if os.path.exists(path):
-        old_df = pd.read_csv(path)
-        combined = pd.concat([old_df, new_df])
-        
-        # Deduplicate
-        if id_col and id_col in combined.columns:
-            combined = combined.drop_duplicates(subset=[id_col])
-        else:
-            combined = combined.drop_duplicates()
-            
-        # Sort
-        if sort_col and sort_col in combined.columns:
-            combined = combined.sort_values(by=sort_col)
-            
-        combined.to_csv(path, index=False)
-        print(f"Updated {filename}: {len(old_df)} -> {len(combined)} rows")
-    else:
-        new_df.to_csv(path, index=False)
-        print(f"Created {filename} with {len(new_df)} rows")
-
 def job():
     print(f"\n=== Starting Daily Update: {datetime.now()} ===")
     
@@ -63,24 +36,21 @@ def job():
         # yfinance is fast enough for this.
         print(f"Updating Stock Price for {ticker}...")
         try:
-            get_stockprice(ticker, start_date="2020-01-01", end_date=tomorrow_str, output_folder=DATA_DIR)
+            get_stockprice(ticker, start_date="2020-01-01", end_date=tomorrow_str, save_db=True)
         except Exception as e:
             print(f"Error fetching price for {ticker}: {e}")
         
         # 2. News - Incremental (Fetch today's data and append)
         print(f"Updating News for {ticker}...")
         try:
-            news_df = get_stocknews(ticker, start_date=today_str, end_date=tomorrow_str, api_key=API_KEY, save_csv=False)
-            update_csv(news_df, f"{ticker}_news.csv", id_col="url", sort_col="published_utc")
+            get_stocknews(ticker, start_date=today_str, end_date=tomorrow_str, api_key=API_KEY, save_db=True)
         except Exception as e:
             print(f"Error fetching news for {ticker}: {e}")
         
         # 3. Reddit - Incremental (Fetch today's data and append)
         print(f"Updating Reddit for {ticker}...")
         try:
-            reddit_df = get_stock_reddit(ticker, start_date=today_str, end_date=tomorrow_str, tickername=ticker, save_csv=False)
-            # 'Permalink' is a good unique ID for Reddit posts/comments
-            update_csv(reddit_df, f"{ticker}_reddit.csv", id_col="Permalink", sort_col="Date")
+            get_stock_reddit(ticker, start_date=today_str, end_date=tomorrow_str, tickername=ticker, save_db=True)
         except Exception as e:
             print(f"Error fetching reddit for {ticker}: {e}")
     

@@ -1,3 +1,5 @@
 yfinance
 pandas
 schedule
+sqlalchemy
+requests

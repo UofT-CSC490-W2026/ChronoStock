@@ -5,8 +5,34 @@ from typing import Optional
 import pandas as pd
 import os
 import requests
+from sqlalchemy import create_engine, text
 
-def get_stockprice(ticker, start_date, end_date, output_folder="stock_data"):
+# --- Database Configuration ---
+DB_USER = os.getenv("RDS_USER", "postgres")
+DB_PASS = os.getenv("RDS_PASS", "password")
+DB_HOST = os.getenv("RDS_HOST", "localhost")
+DB_PORT = os.getenv("RDS_PORT", "5432")
+DB_NAME = os.getenv("RDS_DB", "stock_data")
+
+DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+engine = create_engine(DATABASE_URL)
+
+def save_to_rds(df, table_name, ticker_col=None, ticker_val=None):
+    """Saves DataFrame to RDS. Optionally deletes existing ticker data first."""
+    if df.empty: return
+    try:
+        with engine.begin() as conn:
+            # If replacing data for a specific ticker (e.g. full price history)
+            if ticker_col and ticker_val:
+                print(f"Cleaning existing data for {ticker_val} in {table_name}...")
+                conn.execute(text(f"DELETE FROM {table_name} WHERE \"{ticker_col}\" = :t"), {"t": ticker_val})
+            
+            df.to_sql(table_name, conn, if_exists='append', index=False)
+            print(f"Saved {len(df)} rows to RDS table: {table_name}")
+    except Exception as e:
+        print(f"Error saving to RDS: {e}")
+
+def get_stockprice(ticker, start_date, end_date, save_db=True):
     """
     Fetches historical stock data, saves it to CSV
     """
@@ -21,18 +47,14 @@ def get_stockprice(ticker, start_date, end_date, output_folder="stock_data"):
     if isinstance(data.columns, pd.MultiIndex):
         data.columns = data.columns.get_level_values(0)
 
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
-    csv_filename = f"{output_folder}/{ticker}_price.csv"
-    data.to_csv(csv_filename)
+    # Prepare for DB
+    data = data.reset_index()  # Make Date a column
+    data['ticker'] = ticker    # Add ticker column
     
-import requests
-import pandas as pd
-import time
-import os
+    if save_db:
+        save_to_rds(data, "stock_prices", ticker_col="ticker", ticker_val=ticker)
 
-def get_stocknews(ticker: str, start_date: str, end_date: str, api_key: str, save_csv=True):
+def get_stocknews(ticker: str, start_date: str, end_date: str, api_key: str, save_db=True):
     """
     Fetches news from Massive/Polygon API with strict rate limiting for Free Tier.
     """
@@ -109,14 +131,14 @@ def get_stocknews(ticker: str, start_date: str, end_date: str, api_key: str, sav
 
     # Save Data
     df = pd.DataFrame(all_records)
-    if not df.empty and save_csv:
-        os.makedirs("stock_data", exist_ok=True)
-        df.to_csv(f"stock_data/{ticker}_news.csv", index=False)
-        print(f"Saved to stock_data/{ticker}_news.csv")
+    if not df.empty:
+        df['ticker'] = ticker
+        if save_db:
+            save_to_rds(df, "stock_news")
         
     return df
     
-def get_stock_reddit(query, start_date, end_date,tickername,verbose=True, subreddit="ValueInvesting", save_csv=True):
+def get_stock_reddit(query, start_date, end_date,tickername,verbose=True, subreddit="ValueInvesting", save_db=True):
     """
     Scrapes Reddit data into a Pandas DataFrame and saves to CSV.
     
@@ -194,16 +216,16 @@ def get_stock_reddit(query, start_date, end_date,tickername,verbose=True, subred
 
     # --- Convert to DataFrame and Save ---
     df = pd.DataFrame(all_data)
-    filename=f"stock_data/{tickername}_reddit.csv"
     
     if not df.empty:
         # Optional: Clean up text columns
         df['Body'] = df['Body'].fillna('').astype(str).str.replace('\n', ' ')
         df['Title'] = df['Title'].fillna('').astype(str).str.replace('\n', ' ')
         
-        if save_csv:
-            df.to_csv(filename, index=False)
-            if verbose: print(f"\n\nDone! Saved {len(df)} rows to '{filename}'")
+        df['ticker'] = tickername # Ensure ticker is associated with the data
+        
+        if save_db:
+            save_to_rds(df, "stock_reddit")
     else:
         if verbose: print("\n\nNo data found.")
 
@@ -216,6 +238,6 @@ if __name__ == "__main__":
     START = "2020-02-16"
     END = "2022-02-16"
     
-    # get_stockprice(TICKER, START, END)
+    get_stockprice(TICKER, START, END)
     get_stocknews(TICKER,START,END,api_key='TFaAars11adlxu1WZPyGIstSSo3ySAqB')
-    # get_stock_reddit("amzn|amazon",START,END,TICKER)
+    get_stock_reddit("amzn|amazon",START,END,TICKER)
