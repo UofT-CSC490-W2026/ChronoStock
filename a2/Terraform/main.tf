@@ -58,6 +58,27 @@ module "rds" {
 # ----------------------
 # EC2 Module
 # ----------------------
+resource "aws_iam_role" "ec2_role" {
+  name = "stock-pipeline-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "stock-pipeline-ec2-profile"
+  role = aws_iam_role.ec2_role.name
+}
 
 module "ec2" {
   source = "./modules/ec2"
@@ -66,10 +87,13 @@ module "ec2" {
   key_name           = var.key_name
   security_group_ids = [module.security_group.ec2_sg_id]
 
-  db_host     = module.rds.endpoint
+  db_host = module.rds.db_host
+  db_port = module.rds.db_port
   db_name     = var.db_name
   db_user     = var.db_user
   db_password = var.db_password
+
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
   tags = {
     Name = "stock-pipeline-app"

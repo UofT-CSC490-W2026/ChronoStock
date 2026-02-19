@@ -240,11 +240,37 @@ def get_stock_reddit(query, start_date, end_date,tickername,verbose=True, subred
 
 
 if __name__ == "__main__":
-    # example usage
-    TICKER = "AMZN"
+
+    TICKERS = [
+        "AMZN", "AAPL", "GOOGL", "MSFT", "TSLA"
+    ]
+
     START = "2020-02-16"
     END = "2022-02-16"
-    
-    get_stockprice(TICKER, START, END)
-    get_stocknews(TICKER,START,END,api_key='TFaAars11adlxu1WZPyGIstSSo3ySAqB')
-    get_stock_reddit("amzn|amazon",START,END,TICKER)
+
+    API_KEY = "TFaAars11adlxu1WZPyGIstSSo3ySAqB"
+
+    for ticker in TICKERS:
+        print(f"\nProcessing {ticker}...")
+
+        try:
+            get_stockprice(ticker, START, END)
+        except Exception as e:
+            print(f"Price error for {ticker}: {e}")
+
+        try:
+            get_stocknews(ticker, START, END, api_key=API_KEY)
+        except Exception as e:
+            print(f"News error for {ticker}: {e}")
+
+        try:
+            get_stock_reddit(
+                query=f"{ticker.lower()}",
+                start_date=START,
+                end_date=END,
+                tickername=ticker
+            )
+        except Exception as e:
+            print(f"Reddit error for {ticker}: {e}")
+
+    print("\nIngestion complete.")

@@ -5,17 +5,27 @@ from datetime import timedelta
 import os
 from sqlalchemy import create_engine, text
 from db import engine
+from sqlalchemy import inspect
 
 def save_cleaned_to_rds(df, table_name, ticker_val):
     """Saves cleaned DataFrame to RDS, replacing existing cleaned data for this ticker."""
     if df.empty: return
     try:
         with engine.begin() as conn:
-            print(f"Cleaning existing data for {ticker_val} in {table_name}...")
-            conn.execute(text(f"DELETE FROM {table_name} WHERE ticker = :t"), {"t": ticker_val})
-            
-            df.to_sql(table_name, conn, if_exists='append', index=False)
-            print(f"Saved {len(df)} rows to RDS table: {table_name}")
+            inspector = inspect(conn)
+            table_exists = inspector.has_table(table_name)
+
+            if table_exists:
+                print(f"Cleaning existing data for {ticker_val} in {table_name}...")
+                conn.execute(
+                    text(f'DELETE FROM {table_name} WHERE ticker = :t'),
+                    {"t": ticker_val}
+                )
+                df.to_sql(table_name, conn, if_exists='append', index=False)
+
+            else:
+                print(f"Table {table_name} does not exist. It will be created.")
+                df.to_sql(table_name, conn, if_exists='replace', index=False)
     except Exception as e:
         print(f"Error saving to RDS: {e}")
 
@@ -108,7 +118,17 @@ def clean_stock_news(ticker, ticker_keywords):
     save_cleaned_to_rds(df_final, "stock_news_cleaned", ticker)
 
 if __name__ == "__main__":
-    # Example usage for Amazon
-    amzn_keywords = ['amazon', 'amzn', 'aws', 'jeff bezos', 'andy jassy']
-    
-    clean_stock_news("AMZN", amzn_keywords)
+
+    TICKERS = {
+        "AMZN": ['amazon', 'amzn', 'aws', 'jeff bezos', 'andy jassy'],
+        "AAPL": ['apple', 'aapl', 'iphone', 'tim cook'],
+        "GOOGL": ['google', 'alphabet', 'googl', 'sundar pichai'],
+        "MSFT": ['microsoft', 'msft', 'azure', 'satya nadella'],
+        "TSLA": ['tesla', 'tsla', 'elon musk']
+    }
+
+    for ticker, keywords in TICKERS.items():
+        print(f"\nCleaning data for {ticker}...")
+        clean_stock_news(ticker, keywords)
+
+    print("\nCleaning complete.")

@@ -37,7 +37,3 @@ variable "db_subnet_group_name" {
   description = "DB subnet group name"
   type        = string
 }
-
-output "endpoint" {
-  value = aws_db_instance.db.endpoint
-}

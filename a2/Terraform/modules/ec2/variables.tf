@@ -60,3 +60,13 @@ variable "db_password" {
   type      = string
   sensitive = true
 }
+
+variable "db_port" {
+  description = "RDS port"
+  type        = number
+}
+
+variable "iam_instance_profile" {
+  description = "IAM instance profile attached to EC2"
+  type        = string
+}
