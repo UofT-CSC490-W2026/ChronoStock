@@ -1,0 +1,27 @@
+my_ip = "187.552.462.898/32"
+
+key_name = "demo"
+
+db_password = "ProdStrongPassword123!"
+
+instance_type = "t3.small"
+
+root_block = {
+  size      = 20
+  type      = "gp3"
+  encrypted = true
+}
+
+db_instance_class = "db.t3.small"
+db_allocated_storage = 50
+
+tags = {
+  Project = "stock-pipeline"
+  Owner   = "zihan"
+  Env     = "production"
+}
+
+# Database config
+db_name     = "stock_pipeline"
+db_user     = "postgres"
+db_password = "DevPassword123!"

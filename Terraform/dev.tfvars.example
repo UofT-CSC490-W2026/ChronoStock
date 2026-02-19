@@ -1,0 +1,12 @@
+# Your current public IP (must include /32)
+my_ip = "187.552.462.898/32"
+
+# AWS key pair name
+key_name = "demo"
+
+# password for RDS 
+db_password = "DevPassword123!"
+
+# Database config
+db_name     = "stock_pipeline"
+db_user     = "postgres"

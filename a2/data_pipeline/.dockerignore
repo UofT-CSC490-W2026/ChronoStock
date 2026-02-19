@@ -1,0 +1,29 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+
+# Environment files
+.env
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Local data
+stock_data/

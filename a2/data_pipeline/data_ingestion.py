@@ -6,29 +6,34 @@ import pandas as pd
 import os
 import requests
 from sqlalchemy import create_engine, text
+from db import engine
 
-# --- Database Configuration ---
-DB_USER = os.getenv("RDS_USER", "postgres")
-DB_PASS = os.getenv("RDS_PASS", "password")
-DB_HOST = os.getenv("RDS_HOST", "localhost")
-DB_PORT = os.getenv("RDS_PORT", "5432")
-DB_NAME = os.getenv("RDS_DB", "stock_data")
-
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-engine = create_engine(DATABASE_URL)
+from sqlalchemy import inspect, text
 
 def save_to_rds(df, table_name, ticker_col=None, ticker_val=None):
-    """Saves DataFrame to RDS. Optionally deletes existing ticker data first."""
-    if df.empty: return
+    """Saves DataFrame to RDS. Automatically creates table if not exists."""
+    
+    if df.empty:
+        return
+    
     try:
         with engine.begin() as conn:
-            # If replacing data for a specific ticker (e.g. full price history)
-            if ticker_col and ticker_val:
-                print(f"Cleaning existing data for {ticker_val} in {table_name}...")
-                conn.execute(text(f"DELETE FROM {table_name} WHERE \"{ticker_col}\" = :t"), {"t": ticker_val})
+            inspector = inspect(conn)
+            table_exists = inspector.has_table(table_name)
+            
+            if table_exists:
+                if ticker_col and ticker_val:
+                    print(f"Cleaning existing data for {ticker_val} in {table_name}...")
+                    conn.execute(
+                        text(f'DELETE FROM {table_name} WHERE "{ticker_col}" = :t'),
+                        {"t": ticker_val}
+                    )
+            else:
+                print(f"Table {table_name} does not exist. It will be created.")
             
             df.to_sql(table_name, conn, if_exists='append', index=False)
             print(f"Saved {len(df)} rows to RDS table: {table_name}")
+    
     except Exception as e:
         print(f"Error saving to RDS: {e}")
 
