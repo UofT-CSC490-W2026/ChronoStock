@@ -2,19 +2,49 @@ import pandas as pd
 from difflib import SequenceMatcher
 import re
 from datetime import timedelta
+import os
+from sqlalchemy import create_engine, text
 
-def clean_stock_news(input_file, output_file, ticker_keywords):
+# --- Database Configuration ---
+DB_USER = os.getenv("RDS_USER", "postgres")
+DB_PASS = os.getenv("RDS_PASS", "password")
+DB_HOST = os.getenv("RDS_HOST", "localhost")
+DB_PORT = os.getenv("RDS_PORT", "5432")
+DB_NAME = os.getenv("RDS_DB", "stock_data")
+
+DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+engine = create_engine(DATABASE_URL)
+
+def save_cleaned_to_rds(df, table_name, ticker_val):
+    """Saves cleaned DataFrame to RDS, replacing existing cleaned data for this ticker."""
+    if df.empty: return
+    try:
+        with engine.begin() as conn:
+            print(f"Cleaning existing data for {ticker_val} in {table_name}...")
+            conn.execute(text(f"DELETE FROM {table_name} WHERE ticker = :t"), {"t": ticker_val})
+            
+            df.to_sql(table_name, conn, if_exists='append', index=False)
+            print(f"Saved {len(df)} rows to RDS table: {table_name}")
+    except Exception as e:
+        print(f"Error saving to RDS: {e}")
+
+def clean_stock_news(ticker, ticker_keywords):
     """
     Cleans stock news data by:
     1. Filtering for relevance based on keywords.
     2. Deduplicating entries based on time (24h) and title similarity.
     3. Removing opinion/analysis pieces.
     """
-    print(f"Loading data from {input_file}...")
+    print(f"--- Cleaning News for {ticker} ---")
     try:
-        df = pd.read_csv(input_file)
+        query = text("SELECT * FROM stock_news WHERE ticker = :ticker")
+        df = pd.read_sql(query, engine, params={"ticker": ticker})
     except Exception as e:
-        print(f"Error loading file: {e}")
+        print(f"Error loading from DB: {e}")
+        return
+
+    if df.empty:
+        print(f"No news found for {ticker} in database.")
         return
 
     df['published_utc'] = pd.to_datetime(df['published_utc'], utc=True)
@@ -84,15 +114,10 @@ def clean_stock_news(input_file, output_file, ticker_keywords):
     print(f"Final row count: {len(df_final)}")
 
     # --- Step 4: Save Output ---
-    df_final.to_csv(output_file, index=False)
-    print(f"Cleaned data saved to {output_file}")
+    save_cleaned_to_rds(df_final, "stock_news_cleaned", ticker)
 
 if __name__ == "__main__":
     # Example usage for Amazon
     amzn_keywords = ['amazon', 'amzn', 'aws', 'jeff bezos', 'andy jassy']
     
-    clean_stock_news(
-        input_file='stock_data/AMZN_news.csv', 
-        output_file='stock_data/AMZN_news_processed.csv', 
-        ticker_keywords=amzn_keywords
-    )
+    clean_stock_news("AMZN", amzn_keywords)
