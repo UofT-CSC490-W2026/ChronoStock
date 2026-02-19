@@ -7,16 +7,16 @@ from data_ingestion import get_stockprice, get_stocknews, get_stock_reddit
 
 # Configuration
 TICKERS = [
-    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "V", "UNH",
-    "JNJ", "XOM", "JPM", "WMT", "MA", "PG", "LLY", "CVX", "HD", "ABBV",
-    "MRK", "KO", "PEP", "AVGO", "ORCL", "TMO", "AZN", "COST", "MCD", "CSCO",
-    "ACN", "ABT", "DHR", "NEE", "LIN", "DIS", "TXN", "PM", "WFC", "AMD",
-    "UPS", "BMY", "RTX", "HON", "AMGN", "UNP", "INTU", "LOW", "COP", "IBM",
-    "SBUX", "BA", "GE", "MMM", "CAT", "GS", "MS", "BLK", "C", "SCHW",
-    "DE", "PLD", "EL", "LMT", "ADI", "MDT", "GILD", "ISRG", "TJX", "BKNG",
-    "T", "VZ", "CVS", "CI", "AMT", "SYK", "NOW", "ADP", "MO", "ZTS",
-    "TMUS", "CB", "MMC", "CIG", "SO", "DU", "SLB", "EOG", "BDX", "ITW",
-    "CL", "NOC", "REGN", "SHW", "USB", "PNC", "TGT", "FCX", "GM", "F"
+    # "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "BRK-B", "V", "UNH",
+    # "JNJ", "XOM", "JPM", "WMT", "MA", "PG", "LLY", "CVX", "HD", "ABBV",
+    # "MRK", "KO", "PEP", "AVGO", "ORCL", "TMO", "AZN", "COST", "MCD", "CSCO",
+    # "ACN", "ABT", "DHR", "NEE", "LIN", "DIS", "TXN", "PM", "WFC", "AMD",
+    # "UPS", "BMY", "RTX", "HON", "AMGN", "UNP", "INTU", "LOW", "COP", "IBM",
+    # "SBUX", "BA", "GE", "MMM", "CAT", "GS", "MS", "BLK", "C", "SCHW",
+    # "DE", "PLD", "EL", "LMT", "ADI", "MDT", "GILD", "ISRG", "TJX", "BKNG",
+    # "T", "VZ", "CVS", "CI", "AMT", "SYK", "NOW", "ADP", "MO", "ZTS",
+    # "TMUS", "CB", "MMC", "CIG", "SO", "DU", "SLB", "EOG", "BDX", "ITW",
+    # "CL", "NOC", "REGN", "SHW", "USB", "PNC", "TGT", "FCX", "GM", "F"
 ]
 API_KEY = "TFaAars11adlxu1WZPyGIstSSo3ySAqB"
 DATA_DIR = "stock_data"

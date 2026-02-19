@@ -26,7 +26,8 @@ jobs:
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./a2/data_pipeline
+          file: ./a2/data_pipeline/Dockerfile
           push: true
           tags: zihan123/stock-pipeline:latest
 
