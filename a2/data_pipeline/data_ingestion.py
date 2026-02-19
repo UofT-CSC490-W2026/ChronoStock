@@ -1,3 +1,5 @@
+import json
+
 import yfinance as yf
 import time
 from datetime import datetime
@@ -116,7 +118,7 @@ def get_stocknews(ticker: str, start_date: str, end_date: str, api_key: str, sav
                     "author": article.get('author'),
                     "description": article.get('description'),
                     "keywords": "|".join(article.get('keywords', []) or []),
-                    "insights": article.get('insights',''),
+                    "insights": json.dumps(article.get('insights', [])),
                     "url": article.get('article_url')
                 })
             

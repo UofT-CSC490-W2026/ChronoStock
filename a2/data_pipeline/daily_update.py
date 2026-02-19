@@ -56,10 +56,5 @@ def job():
     
     print("=== Update Complete ===")
 
-# Schedule for 5:00 PM
-schedule.every().day.at("17:00").do(job)
-
-print("Scheduler running... (Press Ctrl+C to stop)")
-while True:
-    schedule.run_pending()
-    time.sleep(60)
+if __name__ == "__main__":
+    job()
