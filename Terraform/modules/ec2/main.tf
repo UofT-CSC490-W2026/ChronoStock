@@ -11,26 +11,30 @@ resource "aws_instance" "app" {
     encrypted   = var.root_block.encrypted
   }
 
-  user_data = <<-EOF
-              #!/bin/bash
-              yum update -y
-              yum install -y docker
-              systemctl start docker
-              systemctl enable docker
+      user_data = <<-EOF
+        #!/bin/bash
 
-              # pull Docker image from ECR (replace with your actual image URI)
-              docker pull zihan123/stock-pipeline:latest
+        yum update -y
+        yum install -y docker
 
-              # run Docker container with environment variables for DB connection
-              docker run -d \
-                -p 8000:8000 \
-                -e DB_HOST=${var.db_host} \
-                -e DB_NAME=${var.db_name} \
-                -e DB_USER=${var.db_user} \
-                -e DB_PASSWORD=${var.db_password} \
-                zihan123/stock-pipeline:latest
-              EOF
+        systemctl start docker
+        systemctl enable docker
 
+        usermod -aG docker ec2-user
+
+        docker pull zihan123/stock-pipeline:latest
+
+        docker run -d \
+          --name stock-pipeline \
+          --restart unless-stopped \
+          -p 8000:8000 \
+          -e RDS_HOST=${var.db_host} \
+          -e RDS_DB=${var.db_name} \
+          -e RDS_USER=${var.db_user} \
+          -e RDS_PASS=${var.db_password} \
+          -e RDS_PORT=5432 \
+          zihan123/stock-pipeline:latest
+        EOF
 
   tags = var.tags
 }

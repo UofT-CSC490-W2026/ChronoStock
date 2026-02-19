@@ -11,7 +11,7 @@ resource "aws_db_instance" "db" {
   username               = var.db_username
   password               = var.db_password
 
-  publicly_accessible    = true
+  publicly_accessible    = false
   storage_encrypted      = true
   auto_minor_version_upgrade = true
 
