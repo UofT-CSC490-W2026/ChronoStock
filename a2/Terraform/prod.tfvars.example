@@ -1,5 +1,3 @@
-my_ip = "187.552.462.898/32"
-
 key_name = "demo"
 
 db_password = "ProdStrongPassword123!"

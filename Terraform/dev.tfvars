@@ -1,3 +1,4 @@
+
 # AWS key pair name
 key_name = "demo"
 

@@ -40,7 +40,6 @@ data "aws_ami" "amazon_linux" {
 module "security_group" {
   source = "./modules/security_group"
 
-  my_ip = var.my_ip
 }
 
 # ----------------------

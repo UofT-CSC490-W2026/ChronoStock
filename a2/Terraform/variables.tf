@@ -1,8 +1,3 @@
-variable "my_ip" {
-  description = "Your public IP address in CIDR format"
-  type        = string
-}
-
 variable "db_password" {
   description = "Database password"
   type        = string
