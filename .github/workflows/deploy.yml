@@ -53,11 +53,13 @@ jobs:
             echo "Starting new container..."
             docker run -d \
               --name stock-pipeline \
+              --restart unless-stopped \
+              --env-file /home/ec2-user/pipeline.env \
               -p 8000:8000 \
-              -e RDS_USER=$RDS_USER \
-              -e RDS_PASS=$RDS_PASS \
-              -e RDS_HOST=$RDS_HOST \
-              -e RDS_DB=$RDS_DB \
               zihan123/stock-pipeline:latest
 
+            echo "Cleaning unused images..."
+            docker image prune -f
+
             echo "Deployment completed."
+

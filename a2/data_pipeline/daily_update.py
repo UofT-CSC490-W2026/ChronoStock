@@ -17,6 +17,7 @@ TICKERS = [
     # "T", "VZ", "CVS", "CI", "AMT", "SYK", "NOW", "ADP", "MO", "ZTS",
     # "TMUS", "CB", "MMC", "CIG", "SO", "DU", "SLB", "EOG", "BDX", "ITW",
     # "CL", "NOC", "REGN", "SHW", "USB", "PNC", "TGT", "FCX", "GM", "F"
+    "AMZN"
 ]
 API_KEY = "TFaAars11adlxu1WZPyGIstSSo3ySAqB"
 DATA_DIR = "stock_data"
