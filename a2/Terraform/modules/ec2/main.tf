@@ -10,31 +10,13 @@ resource "aws_instance" "app" {
     volume_type = var.root_block.type
     encrypted   = var.root_block.encrypted
   }
-
-      # user_data = <<-EOF
-      #   #!/bin/bash
-
-      #   yum update -y
-      #   yum install -y docker
-
-      #   systemctl start docker
-      #   systemctl enable docker
-
-      #   usermod -aG docker ec2-user
-
-      #   docker pull zihan123/stock-pipeline:latest
-
-      #   docker run -d \
-      #     --name stock-pipeline \
-      #     --restart unless-stopped \
-      #     -p 8000:8000 \
-      #     -e RDS_HOST=${var.db_host} \
-      #     -e RDS_DB=${var.db_name} \
-      #     -e RDS_USER=${var.db_user} \
-      #     -e RDS_PASS=${var.db_password} \
-      #     -e RDS_PORT=5432 \
-      #     zihan123/stock-pipeline:latest
-      #   EOF
-
+  
+  user_data = templatefile("${path.module}/scripts/user_data.sh", {
+    db_host     = var.db_host
+    db_name     = var.db_name
+    db_user     = var.db_user
+    db_password = var.db_password
+  })
+    
   tags = var.tags
 }

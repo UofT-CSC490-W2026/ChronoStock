@@ -1,0 +1,62 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: zihan123/stock-pipeline:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "Pulling latest Docker image..."
+            docker pull zihan123/stock-pipeline:latest
+
+            echo "Stopping old container..."
+            docker stop stock-pipeline || true
+            docker rm stock-pipeline || true
+
+            echo "Starting new container..."
+            docker run -d \
+              --name stock-pipeline \
+              -p 8000:8000 \
+              -e RDS_USER=$RDS_USER \
+              -e RDS_PASS=$RDS_PASS \
+              -e RDS_HOST=$RDS_HOST \
+              -e RDS_DB=$RDS_DB \
+              zihan123/stock-pipeline:latest
+
+            echo "Deployment completed."
