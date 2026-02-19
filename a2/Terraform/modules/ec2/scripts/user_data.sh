@@ -37,6 +37,6 @@ systemctl start crond
 
 # Setup cron job
 crontab -l -u ec2-user 2>/dev/null | grep -v stock-pipeline > /tmp/mycron || true
-echo "0 17 * * * /usr/bin/docker run --rm --env-file /home/ec2-user/pipeline.env zihan123/stock-pipeline:latest >> /home/ec2-user/pipeline.log 2>&1" >> /tmp/mycron
+echo "0 17 * * * /usr/bin/docker pull zihan123/stock-pipeline:latest && /usr/bin/docker run --rm --env-file /home/ec2-user/pipeline.env zihan123/stock-pipeline:latest >> /home/ec2-user/pipeline.log 2>&1" >> /tmp/mycron
 crontab -u ec2-user /tmp/mycron
 rm /tmp/mycron
