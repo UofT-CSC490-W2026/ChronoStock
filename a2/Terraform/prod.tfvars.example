@@ -19,7 +19,5 @@ tags = {
   Env     = "production"
 }
 
-# Database config
 db_name     = "stock_pipeline"
 db_user     = "postgres"
-db_password = "DevPassword123!"
