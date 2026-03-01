@@ -43,43 +43,65 @@ module "security_group" {
 }
 
 # ----------------------
-# RDS Module
+# Secrets Module
 # ----------------------
+module "secrets" {
+  source      = "./modules/secrets"
 
-module "rds" {
-  source = "./modules/rds"
-
-  rds_sg_id             = module.security_group.rds_sg_id
-  db_subnet_group_name  = aws_db_subnet_group.main.name
-
+  db_username = var.db_username
   db_password = var.db_password
+  db_host     = module.rds.db_host
+  db_name     = var.db_name
+  polygon_api_key   = var.polygon_api_key
 }
 
-# ----------------------
-# EC2 Module
-# ----------------------
-resource "aws_iam_role" "ec2_role" {
-  name = "stock-pipeline-ec2-role"
+resource "aws_iam_policy" "secrets_policy" {
+  name = "chrono-stock-secrets-policy"
 
-  assume_role_policy = jsonencode({
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "secretsmanager:GetSecretValue"
+      ]
+      Resource = module.secrets.secret_arn
+    }]
+  })
+}
+
+
+# ----------------------
+# S3 Module
+# ----------------------
+module "s3" {
+  source = "./modules/s3"
+  bucket_name = var.bucket_name
+}
+
+resource "aws_iam_policy" "s3_limited_policy" {
+  name = "stock-pipeline-s3-policy"
+
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = module.s3.bucket_arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject","s3:PutObject"]
+        Resource = "${module.s3.bucket_arn}/*"
       }
     ]
   })
 }
 
-resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "stock-pipeline-ec2-profile"
-  role = aws_iam_role.ec2_role.name
-}
-
+# ----------------------
+# EC2
+# ----------------------
 module "ec2" {
   source = "./modules/ec2"
 
@@ -89,13 +111,36 @@ module "ec2" {
 
   db_host = module.rds.db_host
   db_port = module.rds.db_port
-  db_name     = var.db_name
-  db_user     = var.db_user
-  db_password = var.db_password
-
-  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
+  db_name = var.db_name
 
   tags = {
     Name = "stock-pipeline-app"
   }
+}
+
+# ----------------------
+# RDS
+# ----------------------
+module "rds" {
+  source = "./modules/rds"
+
+  rds_sg_id            = module.security_group.rds_sg_id
+  db_subnet_group_name = aws_db_subnet_group.main.name
+
+  db_username = var.db_username
+  db_password = var.db_password
+  db_name     = var.db_name
+}
+
+# ----------------------
+# Attach IAM Policies
+# ----------------------
+resource "aws_iam_role_policy_attachment" "attach_secret_policy" {
+  role       = module.ec2.ec2_role_name
+  policy_arn = aws_iam_policy.secrets_policy.arn
+}
+
+resource "aws_iam_role_policy_attachment" "attach_s3_policy" {
+  role       = module.ec2.ec2_role_name
+  policy_arn = aws_iam_policy.s3_limited_policy.arn
 }

@@ -4,6 +4,7 @@ import pandas as pd
 import os
 from datetime import datetime, timedelta
 from data_ingestion import get_stockprice, get_stocknews, get_stock_reddit
+from db import API_KEY
 
 # Configuration
 TICKERS = [
@@ -19,7 +20,6 @@ TICKERS = [
     # "CL", "NOC", "REGN", "SHW", "USB", "PNC", "TGT", "FCX", "GM", "F"
     "AMZN", "AAPL", "GOOGL", "MSFT", "TSLA"
 ]
-API_KEY = "TFaAars11adlxu1WZPyGIstSSo3ySAqB"
 DATA_DIR = "stock_data"
 
 def job():

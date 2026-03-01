@@ -20,9 +20,8 @@ usermod -aG docker ec2-user
 cat <<EOT > /home/ec2-user/pipeline.env
 RDS_HOST=${db_host}
 RDS_DB=${db_name}
-RDS_USER=${db_user}
-RDS_PASS=${db_password}
 RDS_PORT=5432
+AWS_REGION=ca-central-1
 EOT
 
 chown ec2-user:ec2-user /home/ec2-user/pipeline.env
@@ -37,6 +36,10 @@ systemctl start crond
 
 # Setup cron job
 crontab -l -u ec2-user 2>/dev/null | grep -v stock-pipeline > /tmp/mycron || true
-echo "0 17 * * * /usr/bin/docker pull zihan123/stock-pipeline:latest && /usr/bin/docker run --rm --env-file /home/ec2-user/pipeline.env zihan123/stock-pipeline:latest >> /home/ec2-user/pipeline.log 2>&1" >> /tmp/mycron
+echo "0 17 * * * /usr/bin/docker pull zihan123/stock-pipeline:latest && \
+/usr/bin/docker run --rm --network host \
+--env-file /home/ec2-user/pipeline.env \
+zihan123/stock-pipeline:latest \
+>> /home/ec2-user/pipeline.log 2>&1" >> /tmp/mycron
 crontab -u ec2-user /tmp/mycron
 rm /tmp/mycron

@@ -22,3 +22,4 @@ resource "aws_db_instance" "db" {
   vpc_security_group_ids = [var.rds_sg_id]
   db_subnet_group_name   = var.db_subnet_group_name
 }
+

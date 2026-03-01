@@ -6,4 +6,8 @@ db_password = "DevPassword123!"
 
 # Database config
 db_name     = "stock_pipeline"
-db_user     = "postgres"
+db_username = "postgres"
+db_user = "postgres"
+
+bucket_name = "s3-stock-pipeline-data-dev"
+polygon_api_key = "TFaAars11adlxu1WZPyGIstSSo3ySAqB"

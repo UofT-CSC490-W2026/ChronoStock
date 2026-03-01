@@ -52,21 +52,11 @@ variable "db_name" {
   type = string
 }
 
-variable "db_user" {
-  type = string
-}
-
-variable "db_password" {
-  type      = string
-  sensitive = true
-}
-
 variable "db_port" {
   description = "RDS port"
   type        = number
 }
 
-variable "iam_instance_profile" {
-  description = "IAM instance profile attached to EC2"
-  type        = string
+output "ec2_role_name" {
+  value = aws_iam_role.ec2_role.name
 }

@@ -1,14 +1,25 @@
-import os
+import json
+import boto3
 from sqlalchemy import create_engine
 
-DB_USER = os.getenv("RDS_USER")
-DB_PASS = os.getenv("RDS_PASS")
-DB_HOST = os.getenv("RDS_HOST")
-DB_PORT = os.getenv("RDS_PORT", "5432")
-DB_NAME = os.getenv("RDS_DB")
+def get_db_credentials():
+    client = boto3.client("secretsmanager", region_name="ca-central-1")
+    
+    response = client.get_secret_value(
+        SecretId="chrono-stock-rds-secret"   
+    )
+    
+    secret = json.loads(response["SecretString"])
+    return secret
 
-if not all([DB_USER, DB_PASS, DB_HOST, DB_NAME]):
-    raise ValueError("Database environment variables are not set properly.")
+creds = get_db_credentials()
+
+DB_USER = creds["username"]
+DB_PASS = creds["password"]
+DB_HOST = creds["host"]
+DB_PORT = creds.get("port", "5432")
+DB_NAME = creds["dbname"]
+API_KEY = creds["polygon_api_key"]
 
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 

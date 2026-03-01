@@ -1,8 +1,30 @@
+resource "aws_iam_role" "ec2_role" {
+  name = "stock-pipeline-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "stock-pipeline-ec2-profile"
+  role = aws_iam_role.ec2_role.name
+}
+
 resource "aws_instance" "app" {
   ami           = var.ami
   instance_type = var.instance_type
   key_name      = var.key_name
-  iam_instance_profile = var.iam_instance_profile
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
   vpc_security_group_ids = var.security_group_ids
 
@@ -13,11 +35,9 @@ resource "aws_instance" "app" {
   }
 
   user_data = templatefile("${path.module}/scripts/user_data.sh", {
-    db_port     = var.db_port
-    db_host     = var.db_host
-    db_name     = var.db_name
-    db_user     = var.db_user
-    db_password = var.db_password
+    db_port = var.db_port
+    db_host = var.db_host
+    db_name = var.db_name
   })
 
   tags = var.tags
