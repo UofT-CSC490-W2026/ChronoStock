@@ -1,14 +1,17 @@
+import os
 import json
 import boto3
 from sqlalchemy import create_engine
 
 def get_db_credentials():
+    secret_name = os.getenv("SECRET_NAME")
+
     client = boto3.client("secretsmanager", region_name="ca-central-1")
-    
+
     response = client.get_secret_value(
-        SecretId="chrono-stock-rds-secret"   
+        SecretId=secret_name
     )
-    
+
     secret = json.loads(response["SecretString"])
     return secret
 
