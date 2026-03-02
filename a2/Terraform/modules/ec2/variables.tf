@@ -60,3 +60,8 @@ variable "db_port" {
 output "ec2_role_name" {
   value = aws_iam_role.ec2_role.name
 }
+
+variable "public_subnet_id" {
+  description = "Public subnet for EC2"
+  type        = string
+}

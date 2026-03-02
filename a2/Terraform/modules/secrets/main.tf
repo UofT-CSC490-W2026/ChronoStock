@@ -1,5 +1,5 @@
 resource "aws_secretsmanager_secret" "rds_secret" {
-  name = "chrono-stock-rds-secret"
+  name = var.secret_name
 }
 
 resource "aws_secretsmanager_secret_version" "rds_secret_value" {

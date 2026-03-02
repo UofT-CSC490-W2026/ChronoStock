@@ -1,3 +1,13 @@
+
+resource "aws_db_subnet_group" "private_db" {
+  name       = "stock-private-db-subnet"
+  subnet_ids = var.private_subnet_ids
+
+  tags = {
+    Name = "stock-private-db-subnet"
+  }
+}
+
 resource "aws_db_instance" "db" {
   identifier             = "stock-pipeline-db"
 
@@ -20,6 +30,5 @@ resource "aws_db_instance" "db" {
   final_snapshot_identifier = "stock-pipeline-final-snapshot-${formatdate("YYYYMMDDhhmmss", timestamp())}"
 
   vpc_security_group_ids = [var.rds_sg_id]
-  db_subnet_group_name   = var.db_subnet_group_name
+  db_subnet_group_name   = aws_db_subnet_group.private_db.name
 }
-

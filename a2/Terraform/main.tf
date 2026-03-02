@@ -11,16 +11,6 @@ data "aws_vpc" "default" {
   default = true
 }
 
-# RDS Subnet Group
-resource "aws_db_subnet_group" "main" {
-  name       = "stock-pipeline-db-subnet"
-  subnet_ids = data.aws_subnets.default.ids
-
-  tags = {
-    Name = "stock-pipeline-db-subnet"
-  }
-}
-
 # AMI
 data "aws_ami" "amazon_linux" {
   most_recent = true
@@ -40,6 +30,15 @@ data "aws_ami" "amazon_linux" {
 module "security_group" {
   source = "./modules/security_group"
 
+  vpc_id = module.vpc.vpc_id
+}
+
+# ----------------------
+# VPC Module
+# ----------------------
+
+module "vpc" {
+  source = "./modules/vpc"
 }
 
 # ----------------------
@@ -47,6 +46,8 @@ module "security_group" {
 # ----------------------
 module "secrets" {
   source      = "./modules/secrets"
+  
+  secret_name = var.secret_name
 
   db_username = var.db_username
   db_password = var.db_password
@@ -105,8 +106,10 @@ resource "aws_iam_policy" "s3_limited_policy" {
 module "ec2" {
   source = "./modules/ec2"
 
-  ami                = data.aws_ami.amazon_linux.id
-  key_name           = var.key_name
+  ami      = data.aws_ami.amazon_linux.id
+  key_name = var.key_name
+
+  public_subnet_id   = module.vpc.public_subnet_ids[0]   
   security_group_ids = [module.security_group.ec2_sg_id]
 
   db_host = module.rds.db_host
@@ -124,8 +127,8 @@ module "ec2" {
 module "rds" {
   source = "./modules/rds"
 
-  rds_sg_id            = module.security_group.rds_sg_id
-  db_subnet_group_name = aws_db_subnet_group.main.name
+  rds_sg_id          = module.security_group.rds_sg_id
+  private_subnet_ids = module.vpc.private_subnet_ids
 
   db_username = var.db_username
   db_password = var.db_password

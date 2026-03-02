@@ -24,3 +24,7 @@ variable "db_username" {
 variable "polygon_api_key" {
   sensitive = true
 }
+
+variable "secret_name" {
+  type = string
+}

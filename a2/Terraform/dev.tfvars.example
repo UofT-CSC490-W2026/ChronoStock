@@ -11,3 +11,5 @@ db_user = "postgres"
 
 bucket_name = "s3-stock-pipeline-data-dev"
 polygon_api_key = "TFaAars11adlxu1WZPyGIstSSo3ySAqB"
+
+secret_name = "chrono-stock-rds-secret-dev"

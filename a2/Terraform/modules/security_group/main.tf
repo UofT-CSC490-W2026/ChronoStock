@@ -1,10 +1,6 @@
-data "aws_vpc" "default" {
-  default = true
-}
-
 resource "aws_security_group" "ec2_sg" {
   name   = "ec2-sg"
-  vpc_id = data.aws_vpc.default.id
+  vpc_id = var.vpc_id
 
   ingress {
     from_port   = 80
@@ -37,7 +33,7 @@ resource "aws_security_group" "ec2_sg" {
 
 resource "aws_security_group" "rds_sg" {
   name   = "rds-sg"
-  vpc_id = data.aws_vpc.default.id
+  vpc_id = var.vpc_id
 
   ingress {
     from_port       = 5432
