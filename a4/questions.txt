@@ -1,0 +1,5 @@
+Solve the equation for x: 3x+7=25. Provide the final answer and briefly explain the steps.
+Summarize the following paragraph in one sentence: "Renewable energy sources such as solar and wind power are becoming increasingly important as the world seeks to reduce carbon emissions and combat climate change."
+Write a Python function factorial(n) that returns the factorial of a positive integer n.
+Convert the following list into a comma-separated string: ["apple", "banana", "orange", "grape"]
+List three benefits of exercise and present them as a numbered list.
