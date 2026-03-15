@@ -7,6 +7,14 @@ terraform {
   }
 
   required_version = ">= 1.2"
+
+  backend "s3" {
+    bucket         = "s3-stock-pipeline-data-dev"
+    key            = "terraform/terraform.tfstate"
+    region         = "ca-central-1"
+    dynamodb_table = "terraform-lock"
+    encrypt        = true
+  }
 }
 
 provider "aws" {
