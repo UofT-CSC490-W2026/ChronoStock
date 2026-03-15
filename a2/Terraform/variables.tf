@@ -28,3 +28,9 @@ variable "polygon_api_key" {
 variable "secret_name" {
   type = string
 }
+
+variable "aws_region" {
+  description = "AWS region for deployed resources and EC2 runtime config"
+  type        = string
+  default     = "ca-central-1"
+}

@@ -57,11 +57,26 @@ variable "db_port" {
   type        = number
 }
 
+variable "aws_region" {
+  description = "AWS region for the EC2 app and CloudWatch agent"
+  type        = string
+}
+
+variable "log_group_name" {
+  description = "CloudWatch log group name for pipeline logs"
+  type        = string
+}
+
 output "ec2_role_name" {
   value = aws_iam_role.ec2_role.name
 }
 
 variable "public_subnet_id" {
   description = "Public subnet for EC2"
+  type        = string
+}
+
+variable "secret_name" {
+  description = "Secrets Manager secret name for RDS credentials"
   type        = string
 }
