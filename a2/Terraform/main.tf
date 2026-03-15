@@ -226,7 +226,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
 
 resource "aws_scheduler_schedule" "daily_pipeline" {
   name                         = "stock-pipeline-daily"
-  schedule_expression          = "cron(0 18 * * ? *)"
+  schedule_expression          = "cron(30 19 * * ? *)"
   schedule_expression_timezone = "America/Toronto"
 
   flexible_time_window {
