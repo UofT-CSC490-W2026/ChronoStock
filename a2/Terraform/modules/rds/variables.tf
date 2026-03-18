@@ -33,7 +33,6 @@ variable "rds_sg_id" {
   type        = string
 }
 
-variable "db_subnet_group_name" {
-  description = "DB subnet group name"
-  type        = string
+variable "private_subnet_ids" {
+  type = list(string)
 }
