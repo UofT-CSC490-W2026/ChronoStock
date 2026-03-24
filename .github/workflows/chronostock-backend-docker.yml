@@ -1,8 +1,11 @@
-name: Build and Push Image
+name: Build and Push ChronoStock Backend Image
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, pipelines ]
+    paths:
+      - "backend/**"
+      - ".github/workflows/chronostock-backend-docker.yml"
   workflow_dispatch:
 
 jobs:
@@ -25,7 +28,7 @@ jobs:
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v5
         with:
-          context: ./a2/data_pipeline
-          file: ./a2/data_pipeline/Dockerfile
+          context: ./backend
+          file: ./backend/Dockerfile
           push: true
-          tags: zihan123/stock-pipeline:latest
+          tags: zihan123/chronostock-backend:latest
