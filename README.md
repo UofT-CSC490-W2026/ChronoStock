@@ -4,6 +4,10 @@ AI-powered market intelligence that transforms stock charts into explorable narr
 
 **Guests** see the live price chart and key fundamentals for any ticker. **Signed-in users** unlock AI-powered event analysis overlaid on the chart and a personal watchlist.
 
+<!-- frontend-coverage-start -->
+![Frontend coverage](https://img.shields.io/badge/frontend%20coverage-pending-lightgrey)
+<!-- frontend-coverage-end -->
+
 ---
 
 ## Tech Stack
