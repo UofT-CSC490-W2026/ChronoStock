@@ -7,14 +7,14 @@ AI-powered market intelligence that transforms stock charts into explorable narr
 <!-- coverage:start -->
 ## Frontend Test Coverage
 
-![Coverage](https://img.shields.io/badge/coverage-98.35%25-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-98.80%25-brightgreen)
 
 | Metric | Coverage |
 | --- | ---: |
-| Lines | 98.35% |
-| Statements | 98.35% |
-| Branches | 84.89% |
-| Functions | 92.55% |
+| Lines | 98.80% |
+| Statements | 98.80% |
+| Branches | 85.97% |
+| Functions | 91.13% |
 
 _This section reports frontend Jest coverage and is updated automatically by GitHub Actions._
 <!-- coverage:end -->
