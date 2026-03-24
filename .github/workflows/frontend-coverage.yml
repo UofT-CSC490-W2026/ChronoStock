@@ -1,0 +1,205 @@
+name: Frontend Coverage
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Debug checkout state
+        run: |
+          git rev-parse HEAD
+          node -e "const fs=require('fs'); const s=fs.readFileSync('components/chart/SECPanel.tsx','utf8'); console.log('SECPanel contains Corporate Events:', s.includes('Corporate Events')); console.log('SECPanel contains SEC Filing Details:', s.includes('SEC Filing Details'));"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run test coverage
+        run: npm run test:coverage -- --runInBand
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-report
+          path: frontend/coverage
+
+      - name: Build coverage summary
+        id: summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const path = require("path");
+            const coverageDir = path.join(process.cwd(), "frontend", "coverage");
+            const summaryPath = path.join(coverageDir, "coverage-summary.json");
+            const finalPath = path.join(coverageDir, "coverage-final.json");
+
+            function percentage(covered, total) {
+              if (total === 0) return "100.00";
+              return ((covered / total) * 100).toFixed(2);
+            }
+
+            function buildSummaryFromFinal(finalCoverage) {
+              let totalStatements = 0;
+              let coveredStatements = 0;
+              let totalFunctions = 0;
+              let coveredFunctions = 0;
+              let totalBranches = 0;
+              let coveredBranches = 0;
+              let totalLines = 0;
+              let coveredLines = 0;
+
+              for (const file of Object.values(finalCoverage)) {
+                totalStatements += Object.keys(file.statementMap).length;
+                coveredStatements += Object.values(file.s).filter((count) => count > 0).length;
+
+                totalFunctions += Object.keys(file.fnMap).length;
+                coveredFunctions += Object.values(file.f).filter((count) => count > 0).length;
+
+                totalLines += new Set(
+                  Object.values(file.statementMap).flatMap((location) =>
+                    Array.from(
+                      { length: location.end.line - location.start.line + 1 },
+                      (_, index) => location.start.line + index
+                    )
+                  )
+                ).size;
+                coveredLines += new Set(
+                  Object.entries(file.s)
+                    .filter(([, count]) => count > 0)
+                    .flatMap(([statementId]) => {
+                      const location = file.statementMap[statementId];
+                      return Array.from(
+                        { length: location.end.line - location.start.line + 1 },
+                        (_, index) => location.start.line + index
+                      );
+                    })
+                ).size;
+
+                totalBranches += Object.values(file.branchMap).reduce(
+                  (sum, branch) => sum + branch.locations.length,
+                  0
+                );
+                coveredBranches += Object.values(file.b).reduce(
+                  (sum, hits) => sum + hits.filter((count) => count > 0).length,
+                  0
+                );
+              }
+
+              return {
+                lines: percentage(coveredLines, totalLines),
+                statements: percentage(coveredStatements, totalStatements),
+                branches: percentage(coveredBranches, totalBranches),
+                functions: percentage(coveredFunctions, totalFunctions),
+              };
+            }
+
+            const totals = fs.existsSync(summaryPath)
+              ? (() => {
+                  const summary = JSON.parse(fs.readFileSync(summaryPath, "utf8"));
+                  return {
+                    lines: Number(summary.total.lines.pct).toFixed(2),
+                    statements: Number(summary.total.statements.pct).toFixed(2),
+                    branches: Number(summary.total.branches.pct).toFixed(2),
+                    functions: Number(summary.total.functions.pct).toFixed(2),
+                  };
+                })()
+              : buildSummaryFromFinal(JSON.parse(fs.readFileSync(finalPath, "utf8")));
+
+            const { lines, statements, branches, functions } = totals;
+            const body = [
+              "## Frontend Coverage",
+              "",
+              "| Metric | Coverage |",
+              "| --- | ---: |",
+              `| Lines | ${lines}% |`,
+              `| Statements | ${statements}% |`,
+              `| Branches | ${branches}% |`,
+              `| Functions | ${functions}% |`,
+            ].join("\n");
+
+            core.setOutput("lines", lines);
+            core.setOutput("body", body);
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        env:
+          COVERAGE_BODY: ${{ steps.summary.outputs.body }}
+        with:
+          script: |
+            const body = process.env.COVERAGE_BODY;
+            const issue_number = context.payload.pull_request.number;
+            const marker = "<!-- frontend-coverage-comment -->";
+            const fullBody = `${marker}\n${body}`;
+
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+              }
+            );
+
+            const existing = comments.find((comment) =>
+              comment.user?.type === "Bot" && comment.body?.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: fullBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                body: fullBody,
+              });
+            }
+
+      - name: Update README coverage section
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: node ../scripts/update-readme-coverage.mjs
+
+      - name: Commit README coverage update
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- ../README.md; then
+            git add ../README.md
+            git commit -m "chore: update coverage badge [skip ci]"
+            git push
+          fi
