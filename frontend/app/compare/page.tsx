@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Navbar from "@/components/ui/Navbar";
-import CompareChart, { STOCK_COLORS, CompareStock } from "@/components/chart/CompareChart";
+import CompareChart, { STOCK_COLORS, CompareStock, CompareChartHandle } from "@/components/chart/CompareChart";
 import { fetchStockData, searchTickers } from "@/lib/api";
 import { StockData, OHLCBar, NewsEvent } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
@@ -50,6 +50,87 @@ function pctChange(bars: OHLCBar[]): number | null {
   const start = bars[0].close;
   const end = bars[bars.length - 1].close;
   return ((end - start) / start) * 100;
+}
+
+// ── Co-movement detection ──────────────────────────────────────────────────────
+
+function pearsonCorr(a: number[], b: number[]): number {
+  const n = a.length;
+  if (n < 2) return 0;
+  const ma = a.reduce((s, x) => s + x, 0) / n;
+  const mb = b.reduce((s, x) => s + x, 0) / n;
+  let num = 0, da = 0, db = 0;
+  for (let i = 0; i < n; i++) {
+    num += (a[i] - ma) * (b[i] - mb);
+    da  += (a[i] - ma) ** 2;
+    db  += (b[i] - mb) ** 2;
+  }
+  return da === 0 || db === 0 ? 0 : num / Math.sqrt(da * db);
+}
+
+function avgPairwiseCorr(returnsByStock: number[][]): number {
+  const k = returnsByStock.length;
+  let sum = 0, count = 0;
+  for (let i = 0; i < k; i++) {
+    for (let j = i + 1; j < k; j++) {
+      sum += pearsonCorr(returnsByStock[i], returnsByStock[j]);
+      count++;
+    }
+  }
+  return count === 0 ? 0 : sum / count;
+}
+
+function findCoMovementPeriods(
+  stocks: CompareStock[],
+  threshold = 0.80,
+  windowSize = 10,
+  minDays = 5
+): { from: string; to: string }[] {
+  if (stocks.length < 2) return [];
+
+  // Build close-price maps and find dates common to ALL stocks
+  const priceMaps = stocks.map((s) => new Map(s.bars.map((b) => [b.time, b.close])));
+  const commonDates = stocks[0].bars
+    .map((b) => b.time)
+    .filter((d) => priceMaps.every((m) => m.has(d)));
+
+  if (commonDates.length < windowSize + 1) return [];
+
+  // Daily % returns for each stock on each common date
+  const returns: number[][] = stocks.map((_, si) =>
+    commonDates.slice(1).map((date, i) => {
+      const prev = priceMaps[si].get(commonDates[i])!;
+      const curr = priceMaps[si].get(date)!;
+      return (curr - prev) / prev;
+    })
+  );
+
+  // Mark return-period indices that fall inside a high-correlation window
+  const n = returns[0].length;
+  const marked = new Set<number>();
+  for (let w = 0; w <= n - windowSize; w++) {
+    const windowReturns = stocks.map((_, si) => returns[si].slice(w, w + windowSize));
+    if (avgPairwiseCorr(windowReturns) >= threshold) {
+      for (let j = w; j < w + windowSize; j++) marked.add(j);
+    }
+  }
+
+  // Group consecutive marked indices into date ranges (index maps to commonDates[index + 1])
+  const periods: { from: string; to: string }[] = [];
+  let start: number | null = null;
+  const sortedIdx = Array.from(marked).sort((a, b) => a - b);
+  for (let k = 0; k < sortedIdx.length; k++) {
+    const idx = sortedIdx[k];
+    if (start === null) start = idx;
+    if (k === sortedIdx.length - 1 || sortedIdx[k + 1] !== idx + 1) {
+      const len = idx - start + 1;
+      if (len >= minDays) {
+        periods.push({ from: commonDates[start + 1], to: commonDates[idx + 1] });
+      }
+      start = null;
+    }
+  }
+  return periods;
 }
 
 // ── Ticker search dropdown ─────────────────────────────────────────────────────
@@ -123,8 +204,16 @@ export default function ComparePage() {
   const [stockMap, setStockMap] = useState<Record<string, StockData>>({});
   const [loadingTickers, setLoadingTickers] = useState<Set<string>>(new Set());
   const [range, setRange] = useState<TimeRange>("1Y");
+  const [normalized, setNormalized] = useState(true);
+  const [coMovement, setCoMovement] = useState(false);
+  const [corrThreshold, setCorrThreshold] = useState(0.8);
+  const [highlightPeriods, setHighlightPeriods] = useState<{ from: string; to: string }[]>([]);
+  const [highlightPositions, setHighlightPositions] = useState<{ x1: number; x2: number }[]>([]);
   // Per-ticker event visibility toggle (logged-in users only)
   const [eventVisible, setEventVisible] = useState<Record<string, boolean>>({});
+
+  const chartRef = useRef<CompareChartHandle>(null);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
 
   // Fetch data when a ticker is added
   async function addTicker(ticker: string) {
@@ -183,6 +272,32 @@ export default function ComparePage() {
     }
     return evs.sort((a, b) => b.time.localeCompare(a.time));
   }, [compareStocks, visibleEventTickers]);
+
+  // Compute co-movement periods whenever the toggle or data changes
+  useEffect(() => {
+    if (!coMovement || compareStocks.length < 2) {
+      setHighlightPeriods([]);
+      return;
+    }
+    setHighlightPeriods(findCoMovementPeriods(compareStocks, corrThreshold));
+  }, [coMovement, compareStocks, corrThreshold]);
+
+  // Convert date-based periods to pixel positions (also called on chart pan/zoom)
+  const computeHighlightPositions = useCallback(() => {
+    if (!chartRef.current || !highlightPeriods.length) {
+      setHighlightPositions([]);
+      return;
+    }
+    const positions = highlightPeriods.flatMap(({ from, to }) => {
+      const x1 = chartRef.current!.getXForTime(from);
+      const x2 = chartRef.current!.getXForTime(to);
+      if (x1 === null || x2 === null) return [];
+      return [{ x1, x2 }];
+    });
+    setHighlightPositions(positions);
+  }, [highlightPeriods]);
+
+  useEffect(() => { computeHighlightPositions(); }, [highlightPeriods, computeHighlightPositions]);
 
   const SENTIMENT_DOT: Record<NewsEvent["sentiment"], string> = {
     positive: "bg-green-500", negative: "bg-red-500", neutral: "bg-amber-500",
@@ -257,7 +372,7 @@ export default function ComparePage() {
           </div>
 
           {/* Chart */}
-          <div className="flex-1 rounded-xl overflow-hidden border border-slate-800">
+          <div ref={chartContainerRef} className="flex-1 rounded-xl overflow-hidden border border-slate-800 relative">
             {tickers.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-500">
                 <svg className="w-12 h-12 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -267,16 +382,105 @@ export default function ComparePage() {
                 <p className="text-sm">Search and add stocks above to compare</p>
               </div>
             ) : (
-              <CompareChart stocks={compareStocks} visibleEventTickers={visibleEventTickers} />
+              <CompareChart
+                ref={chartRef}
+                stocks={compareStocks}
+                visibleEventTickers={visibleEventTickers}
+                normalized={normalized}
+                onViewChange={computeHighlightPositions}
+              />
             )}
+
+            {/* Co-movement highlight bands */}
+            {coMovement && highlightPositions.map((pos, i) => (
+              <div
+                key={i}
+                className="absolute top-0 bottom-0 pointer-events-none"
+                style={{
+                  left: pos.x1,
+                  width: Math.max(pos.x2 - pos.x1, 2),
+                  background: "rgba(251, 191, 36, 0.10)",
+                  borderLeft: "1px solid rgba(251, 191, 36, 0.35)",
+                  borderRight: "1px solid rgba(251, 191, 36, 0.35)",
+                  zIndex: 5,
+                }}
+              />
+            ))}
           </div>
 
           {/* Footer note */}
-          <p className="text-xs text-slate-600">Chart shows % change from start of selected range for fair comparison.</p>
+          <p className="text-xs text-slate-600">
+            {normalized
+              ? "Chart shows % change from start of range for fair comparison."
+              : "Chart shows raw price — enable Normalize in the sidebar to compare stocks at different price levels."}
+          </p>
         </div>
 
         {/* ── Sidebar ── */}
         <aside className="w-72 shrink-0 border-l border-slate-800 overflow-y-auto p-4 flex flex-col gap-4">
+
+          {/* Chart Controls */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">Chart Controls</p>
+            <div className="flex flex-col gap-1.5">
+
+              {/* Normalize */}
+              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${normalized ? "border-indigo-700 bg-indigo-950/40" : "border-slate-800 bg-slate-900"}`}>
+                <span className={`shrink-0 ${normalized ? "text-indigo-400" : "text-slate-600"}`}>
+                  {/* bar-chart icon */}
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />
+                  </svg>
+                </span>
+                <span className={`text-xs flex-1 ${normalized ? "text-slate-200" : "text-slate-500"}`}>Normalize</span>
+                <button
+                  onClick={() => setNormalized((v) => !v)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${normalized ? "bg-indigo-600" : "bg-slate-700"}`}
+                  title={normalized ? "Switch to raw price" : "Switch to % change (normalized)"}
+                >
+                  <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${normalized ? "translate-x-5" : "translate-x-1"}`} />
+                </button>
+              </div>
+
+              {/* Co-movement */}
+              <div className={`flex flex-col gap-2 px-3 py-2 rounded-lg border transition-colors ${coMovement ? "border-amber-700 bg-amber-950/30" : "border-slate-800 bg-slate-900"} ${compareStocks.length < 2 ? "opacity-40" : ""}`}>
+                <div className="flex items-center gap-2">
+                  <span className={`shrink-0 ${coMovement ? "text-amber-400" : "text-slate-600"}`}>
+                    {/* activity / correlation icon */}
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                  </span>
+                  <span className={`text-xs flex-1 ${coMovement ? "text-slate-200" : "text-slate-500"}`}>Co-movement</span>
+                  <button
+                    onClick={() => setCoMovement((v) => !v)}
+                    disabled={compareStocks.length < 2}
+                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed ${coMovement ? "bg-amber-500" : "bg-slate-700"}`}
+                    title="Highlight periods when all stocks moved together (macro events)"
+                  >
+                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${coMovement ? "translate-x-5" : "translate-x-1"}`} />
+                  </button>
+                </div>
+                {coMovement && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-500 shrink-0">ρ ≥</span>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={0.95}
+                      step={0.05}
+                      value={corrThreshold}
+                      onChange={(e) => setCorrThreshold(parseFloat(e.target.value))}
+                      className="flex-1 accent-amber-500"
+                    />
+                    <span className="text-[10px] text-amber-400 font-mono w-7 shrink-0 text-right">{corrThreshold.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+
           {user ? (
             <>
               {/* Per-ticker event toggles */}

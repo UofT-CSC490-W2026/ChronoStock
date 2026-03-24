@@ -12,7 +12,7 @@ import NewsPanel from "@/components/chart/NewsPanel";
 import SECPanel from "@/components/chart/SECPanel";
 import Navbar from "@/components/ui/Navbar";
 import { useAuth } from "@/contexts/AuthContext";
-import { FileChartColumn, ExternalLink, ArrowLeftRight, Landmark } from "lucide-react";
+import { FileChartColumn, ExternalLink, ArrowLeftRight, Landmark, Newspaper } from "lucide-react";
 
 // ── Time range ────────────────────────────────────────────────────────────────
 
@@ -378,6 +378,12 @@ export default function StockPage() {
     }
   }
 
+  // Asset type flags — equity/etf/unknown get the full page; index and crypto get a stripped-down view
+  const assetType = data?.assetType ?? "equity";
+  const isEquity = assetType === "equity" || assetType === "etf" || assetType === "unknown";
+  const isIndex  = assetType === "index";
+  const isCrypto = assetType === "crypto";
+
   return (
     <div className="flex flex-col h-screen bg-slate-950 text-slate-200">
       <Navbar showSearch />
@@ -406,6 +412,24 @@ export default function StockPage() {
                       {data.companyName}
                     </span>
                   </h2>
+                  {isIndex && (
+                    <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-sky-900/50 border border-sky-700 text-sky-300">
+                      Index
+                    </span>
+                  )}
+                  {isCrypto && (
+                    <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-amber-900/50 border border-amber-700 text-amber-300">
+                      Crypto
+                    </span>
+                  )}
+
+                  <Link
+                    href={`/stock/${ticker}/news?range=${range}`}
+                    className="flex items-center gap-1 px-3 py-1 rounded-lg text-sm font-medium border bg-slate-800 border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+                  >
+                    <Newspaper className="w-3.5 h-3.5" />
+                    News
+                  </Link>
 
                   {/* Watchlist button */}
                   {user ? (
@@ -530,20 +554,24 @@ export default function StockPage() {
                   </span>
                 </>
               )}
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-indigo-500" /> 8-K
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-orange-500" /> Form 4
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-full border border-green-400" style={{ boxShadow: "0 0 4px #4ade8088" }} />
-                Earnings beat
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-full border border-red-400" style={{ boxShadow: "0 0 4px #f8717188" }} />
-                Earnings miss
-              </span>
+              {isEquity && (
+                <>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500" /> 8-K
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-orange-500" /> Form 4
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full border border-green-400" style={{ boxShadow: "0 0 4px #4ade8088" }} />
+                    Earnings beat
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full border border-red-400" style={{ boxShadow: "0 0 4px #f8717188" }} />
+                    Earnings miss
+                  </span>
+                </>
+              )}
               <span className="ml-auto">
                 {user ? (
                   "Hover markers or cards to link · Click cards to expand"
@@ -561,7 +589,7 @@ export default function StockPage() {
 
           {/* Sidebar */}
           <aside className="w-80 shrink-0 border-l border-slate-800 overflow-y-auto">
-            {user && (
+            {user && isEquity && (
               <div className="p-4 border-b border-slate-800">
                 <EventPanel
                   events={filteredEvents}
@@ -572,63 +600,67 @@ export default function StockPage() {
                 />
               </div>
             )}
-            <div className="border-b border-slate-800">
-              <div className="px-4 pt-3 pb-2">
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-2">Chart Overlays</p>
-                <div className="flex flex-col gap-1">
-                  {earnings.length > 0 && (
-                    <div className="flex items-center justify-between py-1.5">
-                      <div className="flex items-center gap-2 text-slate-400">
-                        <FileChartColumn className="w-3.5 h-3.5" />
-                        <span className="text-xs text-slate-300">Earnings Reports</span>
-                      </div>
-                      <button
-                        onClick={() => { setShowEarnings((v) => !v); setExpandedEarning(null); }}
-                        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${showEarnings ? "bg-indigo-600" : "bg-slate-700"}`}
-                      >
-                        <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${showEarnings ? "translate-x-5" : "translate-x-1"}`} />
-                      </button>
+            {isEquity && (
+              <>
+                <div className="border-b border-slate-800">
+                  <div className="px-4 pt-3 pb-2">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-2">Chart Overlays</p>
+                    <div className="flex flex-col gap-1">
+                      {earnings.length > 0 && (
+                        <div className="flex items-center justify-between py-1.5">
+                          <div className="flex items-center gap-2 text-slate-400">
+                            <FileChartColumn className="w-3.5 h-3.5" />
+                            <span className="text-xs text-slate-300">Earnings Reports</span>
+                          </div>
+                          <button
+                            onClick={() => { setShowEarnings((v) => !v); setExpandedEarning(null); }}
+                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${showEarnings ? "bg-indigo-600" : "bg-slate-700"}`}
+                          >
+                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${showEarnings ? "translate-x-5" : "translate-x-1"}`} />
+                          </button>
+                        </div>
+                      )}
+                      {(() => {
+                        const longRange = range === "5Y" || range === "ALL";
+                        return (
+                          <>
+                            <div className={`flex items-center justify-between py-1.5 ${longRange ? "opacity-40" : ""}`}>
+                              <div className="flex items-center gap-2" style={{ color: "#6366f1" }}>
+                                <Landmark className="w-3.5 h-3.5" />
+                                <span className="text-xs text-slate-300">8-K Filings</span>
+                                {longRange && <span className="text-[10px] text-slate-600">N/A for 5Y+</span>}
+                              </div>
+                              <button
+                                disabled={longRange}
+                                onClick={() => setShow8K((v) => !v)}
+                                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${show8K && !longRange ? "bg-indigo-600" : "bg-slate-700"} ${longRange ? "cursor-not-allowed" : ""}`}
+                              >
+                                <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${show8K && !longRange ? "translate-x-5" : "translate-x-1"}`} />
+                              </button>
+                            </div>
+                            <div className={`flex items-center justify-between py-1.5 ${longRange ? "opacity-40" : ""}`}>
+                              <div className="flex items-center gap-2" style={{ color: "#f97316" }}>
+                                <ArrowLeftRight className="w-3.5 h-3.5" />
+                                <span className="text-xs text-slate-300">Form 4 Filings</span>
+                                {longRange && <span className="text-[10px] text-slate-600">N/A for 5Y+</span>}
+                              </div>
+                              <button
+                                disabled={longRange}
+                                onClick={() => setShowForm4((v) => !v)}
+                                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${showForm4 && !longRange ? "bg-indigo-600" : "bg-slate-700"} ${longRange ? "cursor-not-allowed" : ""}`}
+                              >
+                                <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${showForm4 && !longRange ? "translate-x-5" : "translate-x-1"}`} />
+                              </button>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
-                  )}
-                  {(() => {
-                    const longRange = range === "5Y" || range === "ALL";
-                    return (
-                      <>
-                        <div className={`flex items-center justify-between py-1.5 ${longRange ? "opacity-40" : ""}`}>
-                          <div className="flex items-center gap-2" style={{ color: "#6366f1" }}>
-                            <Landmark className="w-3.5 h-3.5" />
-                            <span className="text-xs text-slate-300">8-K Filings</span>
-                            {longRange && <span className="text-[10px] text-slate-600">N/A for 5Y+</span>}
-                          </div>
-                          <button
-                            disabled={longRange}
-                            onClick={() => setShow8K((v) => !v)}
-                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${show8K && !longRange ? "bg-indigo-600" : "bg-slate-700"} ${longRange ? "cursor-not-allowed" : ""}`}
-                          >
-                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${show8K && !longRange ? "translate-x-5" : "translate-x-1"}`} />
-                          </button>
-                        </div>
-                        <div className={`flex items-center justify-between py-1.5 ${longRange ? "opacity-40" : ""}`}>
-                          <div className="flex items-center gap-2" style={{ color: "#f97316" }}>
-                            <ArrowLeftRight className="w-3.5 h-3.5" />
-                            <span className="text-xs text-slate-300">Form 4 Filings</span>
-                            {longRange && <span className="text-[10px] text-slate-600">N/A for 5Y+</span>}
-                          </div>
-                          <button
-                            disabled={longRange}
-                            onClick={() => setShowForm4((v) => !v)}
-                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${showForm4 && !longRange ? "bg-indigo-600" : "bg-slate-700"} ${longRange ? "cursor-not-allowed" : ""}`}
-                          >
-                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${showForm4 && !longRange ? "translate-x-5" : "translate-x-1"}`} />
-                          </button>
-                        </div>
-                      </>
-                    );
-                  })()}
+                  </div>
                 </div>
-              </div>
-            </div>
-            <SECPanel filings={secFilings} />
+                <SECPanel filings={secFilings} />
+              </>
+            )}
             <div className="p-4">
               <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">
                 Recent News
@@ -637,8 +669,8 @@ export default function StockPage() {
             </div>
           </aside>
 
-          {/* Earnings icons overlay */}
-          {showEarnings && earningPositions.map((pos) => {
+          {/* Earnings icons overlay — equity only */}
+          {isEquity && showEarnings && earningPositions.map((pos) => {
             const beat = pos.earning.surprisePct != null && pos.earning.surprisePct > 0;
             const miss = pos.earning.surprisePct != null && pos.earning.surprisePct < 0;
             const colorHex = beat ? "#4ade80" : miss ? "#f87171" : "#fbbf24";
@@ -711,8 +743,8 @@ export default function StockPage() {
             );
           })}
 
-          {/* 8-K corporate event badges */}
-          {show8K && eightKPositions.map((pos) => {
+          {/* 8-K corporate event badges — equity only */}
+          {isEquity && show8K && eightKPositions.map((pos) => {
             const isExpanded = expanded8K === pos.date;
             return (
               <div
@@ -762,8 +794,8 @@ export default function StockPage() {
             );
           })}
 
-          {/* Form 4 insider transaction badges */}
-          {showForm4 && form4Positions.map((pos) => {
+          {/* Form 4 insider transaction badges — equity only */}
+          {isEquity && showForm4 && form4Positions.map((pos) => {
             const isExpanded = expandedForm4 === pos.date;
             return (
               <div

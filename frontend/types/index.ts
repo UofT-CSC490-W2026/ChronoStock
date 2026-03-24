@@ -43,6 +43,7 @@ export interface StockMeta {
 export interface StockData {
   ticker: string;
   companyName: string;
+  assetType?: "equity" | "index" | "crypto" | "etf" | "unknown";
   bars: OHLCBar[];
   events: NewsEvent[];
   meta?: StockMeta;

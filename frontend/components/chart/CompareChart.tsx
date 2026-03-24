@@ -23,6 +23,8 @@ export interface CompareStock {
 interface CompareChartProps {
   stocks: CompareStock[];
   visibleEventTickers: Set<string>;
+  normalized: boolean;
+  onViewChange?: () => void;
 }
 
 export interface CompareChartHandle {
@@ -35,7 +37,7 @@ const SENTIMENT_COLOR: Record<NewsEvent["sentiment"], string> = {
   neutral: "#f59e0b",
 };
 
-function normalize(bars: OHLCBar[]): { time: Time; value: number }[] {
+function toNormalized(bars: OHLCBar[]): { time: Time; value: number }[] {
   if (!bars.length) return [];
   const base = bars[0].close;
   return bars.map((b) => ({
@@ -44,8 +46,12 @@ function normalize(bars: OHLCBar[]): { time: Time; value: number }[] {
   }));
 }
 
+function toRaw(bars: OHLCBar[]): { time: Time; value: number }[] {
+  return bars.map((b) => ({ time: b.time as Time, value: b.close }));
+}
+
 const CompareChart = forwardRef<CompareChartHandle, CompareChartProps>(
-  ({ stocks, visibleEventTickers }, ref) => {
+  ({ stocks, visibleEventTickers, normalized, onViewChange }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
 
@@ -74,7 +80,9 @@ const CompareChart = forwardRef<CompareChartHandle, CompareChartProps>(
         rightPriceScale: { borderColor: "#1e293b" },
         timeScale: { borderColor: "#1e293b", timeVisible: true },
         localization: {
-          priceFormatter: (p: number) => `${p >= 0 ? "+" : ""}${p.toFixed(2)}%`,
+          priceFormatter: normalized
+            ? (p: number) => `${p >= 0 ? "+" : ""}${p.toFixed(2)}%`
+            : (p: number) => `$${p.toFixed(2)}`,
         },
       });
 
@@ -91,7 +99,7 @@ const CompareChart = forwardRef<CompareChartHandle, CompareChartProps>(
           title: stock.ticker,
         });
 
-        series.setData(normalize(stock.bars));
+        series.setData(normalized ? toNormalized(stock.bars) : toRaw(stock.bars));
 
         // Add this stock's events if its ticker is in the visible set
         if (visibleEventTickers.has(stock.ticker) && stock.events.length > 0) {
@@ -107,10 +115,17 @@ const CompareChart = forwardRef<CompareChartHandle, CompareChartProps>(
         }
       }
 
-      requestAnimationFrame(() => chart.timeScale().fitContent());
+      requestAnimationFrame(() => {
+        chart.timeScale().fitContent();
+        onViewChange?.();
+      });
+
+      if (onViewChange) {
+        chart.timeScale().subscribeVisibleLogicalRangeChange(onViewChange);
+      }
 
       return () => chart.remove();
-    }, [stocks, visibleEventTickers]);
+    }, [stocks, visibleEventTickers, normalized, onViewChange]);
 
     return <div ref={containerRef} className="w-full h-full" />;
   }

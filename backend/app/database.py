@@ -55,6 +55,13 @@ def init_db() -> None:
                     PRIMARY KEY (user_id, ticker)
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                    token TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
+                )
+            """)
         conn.commit()
     finally:
         conn.close()

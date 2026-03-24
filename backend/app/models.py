@@ -47,6 +47,7 @@ class StockMeta(BaseModel):
 class StockResponse(BaseModel):
     ticker: str
     companyName: str
+    assetType: str = "equity"   # "equity" | "index" | "crypto" | "etf" | "unknown"
     bars: list[OHLCBar]
     events: list[NewsEvent]
     meta: Optional[StockMeta] = None
@@ -95,6 +96,19 @@ class TrendingItem(BaseModel):
     price: Optional[float] = None
     change: Optional[float] = None
     changePct: Optional[float] = None
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+class MessageResponse(BaseModel):
+    message: str
 
 
 class SECFiling(BaseModel):

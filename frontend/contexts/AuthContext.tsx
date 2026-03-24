@@ -2,9 +2,6 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-// Set to true to use mock auth (no real API calls)
-const MOCK_AUTH = false;
-
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 interface User {
@@ -22,6 +19,10 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function isMockAuthEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_MOCK_AUTH === "true";
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -31,7 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const stored = localStorage.getItem("chrono_token");
     if (!stored) return;
 
-    if (MOCK_AUTH) {
+    if (isMockAuthEnabled()) {
       const storedUser = localStorage.getItem("chrono_user");
       if (storedUser) {
         try {
@@ -63,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function login(email: string, password: string): Promise<void> {
-    if (MOCK_AUTH) {
+    if (isMockAuthEnabled()) {
       const fakeToken = "mock-token-" + Math.random().toString(36).slice(2);
       const fakeUser: User = { id: "mock-id", email };
       localStorage.setItem("chrono_token", fakeToken);
@@ -95,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function signup(email: string, password: string): Promise<void> {
-    if (MOCK_AUTH) {
+    if (isMockAuthEnabled()) {
       const fakeToken = "mock-token-" + Math.random().toString(36).slice(2);
       const fakeUser: User = { id: "mock-id-" + Math.random().toString(36).slice(2), email };
       localStorage.setItem("chrono_token", fakeToken);

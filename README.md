@@ -4,9 +4,20 @@ AI-powered market intelligence that transforms stock charts into explorable narr
 
 **Guests** see the live price chart and key fundamentals for any ticker. **Signed-in users** unlock AI-powered event analysis overlaid on the chart and a personal watchlist.
 
-<!-- frontend-coverage-start -->
-![Frontend coverage](https://img.shields.io/badge/frontend%20coverage-pending-lightgrey)
-<!-- frontend-coverage-end -->
+<!-- coverage:start -->
+## Frontend Test Coverage
+
+![Coverage](https://img.shields.io/badge/coverage-98.35%25-brightgreen)
+
+| Metric | Coverage |
+| --- | ---: |
+| Lines | 98.35% |
+| Statements | 98.35% |
+| Branches | 84.89% |
+| Functions | 92.55% |
+
+_This section reports frontend Jest coverage and is updated automatically by GitHub Actions._
+<!-- coverage:end -->
 
 ---
 
@@ -134,4 +145,4 @@ ChronoStock/
 - **Stock data is cached on first load** — each ticker is stored as a JSON file under `backend/cache/`. Delete the file to force a fresh fetch.
 - **Trending stocks are cached for 24 hours** — stored in `backend/cache/trending.json`.
 - **The AI event layer is not yet connected** — the backend returns `events: []` for now. This is the next feature to build.
-- **To switch from mock auth to real auth**, set `MOCK_AUTH = false` in `frontend/contexts/AuthContext.tsx` and make sure the backend is running.
+- **To use mock auth for local testing**, set `NEXT_PUBLIC_MOCK_AUTH=true` in the frontend environment. Leave it unset to use real backend auth.

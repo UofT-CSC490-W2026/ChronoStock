@@ -14,11 +14,14 @@ import { StockData } from "@/types";
 
 // Stock data + search → real backend
 // Auth + watchlist → still mocked (linked later)
-const MOCK_AUTH = false;
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 // In-memory mock watchlist
 let mockWatchlist: { ticker: string; added_at: string }[] = [];
+
+function isMockAuthEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_MOCK_AUTH === "true";
+}
 
 export async function fetchStockData(ticker: string): Promise<StockData> {
   // Fetch full history so the frontend can switch ranges client-side
@@ -118,7 +121,7 @@ export async function fetchSECFilings(ticker: string): Promise<SECFiling[]> {
 }
 
 export async function fetchWatchlist(token: string): Promise<{ ticker: string; added_at: string }[]> {
-  if (MOCK_AUTH) {
+  if (isMockAuthEnabled()) {
     return [...mockWatchlist];
   }
 
@@ -130,7 +133,7 @@ export async function fetchWatchlist(token: string): Promise<{ ticker: string; a
 }
 
 export async function addToWatchlist(ticker: string, token: string): Promise<void> {
-  if (MOCK_AUTH) {
+  if (isMockAuthEnabled()) {
     const upper = ticker.toUpperCase();
     if (!mockWatchlist.find((w) => w.ticker === upper)) {
       mockWatchlist.push({ ticker: upper, added_at: new Date().toISOString() });
@@ -145,8 +148,29 @@ export async function addToWatchlist(ticker: string, token: string): Promise<voi
   if (!res.ok) throw new Error(`API error ${res.status}`);
 }
 
+export async function requestPasswordReset(email: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+}
+
+export async function resetPassword(token: string, new_password: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail ?? `API error ${res.status}`);
+  }
+}
+
 export async function removeFromWatchlist(ticker: string, token: string): Promise<void> {
-  if (MOCK_AUTH) {
+  if (isMockAuthEnabled()) {
     const upper = ticker.toUpperCase();
     mockWatchlist = mockWatchlist.filter((w) => w.ticker !== upper);
     return;
