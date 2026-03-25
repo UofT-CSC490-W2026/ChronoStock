@@ -62,6 +62,47 @@ def init_db() -> None:
                     expires_at TEXT NOT NULL
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS stock_events (
+                    ticker TEXT NOT NULL,
+                    event_id TEXT NOT NULL,
+                    event_date TEXT NOT NULL,
+                    published_utc TEXT,
+                    title TEXT NOT NULL,
+                    summary TEXT,
+                    sentiment TEXT NOT NULL,
+                    sentiment_reasoning TEXT,
+                    source TEXT NOT NULL,
+                    url TEXT,
+                    car REAL,
+                    abs_car REAL,
+                    pipeline_run_at TEXT NOT NULL,
+                    PRIMARY KEY (ticker, event_id)
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_stock_events_ticker_event_date
+                ON stock_events (ticker, event_date DESC)
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_stock_events_pipeline_run_at
+                ON stock_events (pipeline_run_at DESC)
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS pipeline_runs (
+                    run_id TEXT PRIMARY KEY,
+                    pipeline_name TEXT NOT NULL,
+                    scope TEXT,
+                    started_at TEXT NOT NULL,
+                    completed_at TEXT,
+                    status TEXT NOT NULL,
+                    details TEXT
+                )
+            """)
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_pipeline_runs_name_started_at
+                ON pipeline_runs (pipeline_name, started_at DESC)
+            """)
         conn.commit()
     finally:
         conn.close()

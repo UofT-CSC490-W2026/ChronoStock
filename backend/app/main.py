@@ -105,6 +105,7 @@ def get_stock(
     range: TimeRange = Query(default="1Y"),
 ):
     ticker = ticker.upper()
+    from .demo_events import get_demo_events
 
     STOCK_CACHE_TTL_HOURS = 24
 
@@ -129,13 +130,12 @@ def get_stock(
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Data provider error: {e}")
 
-        from .demo_events import get_demo_events
         full = StockResponse(
             ticker=ticker,
             companyName=company_name,
             assetType=asset_type,
             bars=bars,
-            events=get_demo_events(ticker),
+            events=[],
             meta=meta,
         )
         payload = full.model_dump()
@@ -143,9 +143,10 @@ def get_stock(
         cache.set(f"stock:{ticker}", payload)
 
     # Slice to the requested range in memory — no extra network call
+    current_events = get_demo_events(ticker)
     filtered_bars = _filter_bars(full.bars, range)
     from_date = filtered_bars[0].time if filtered_bars else ""
-    filtered_events = [e for e in full.events if e.time >= from_date]
+    filtered_events = [e for e in current_events if e.time >= from_date]
 
     return StockResponse(
         ticker=full.ticker,
