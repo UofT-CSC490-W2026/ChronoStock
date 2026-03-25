@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import Navbar from "@/components/ui/Navbar";
@@ -54,7 +54,7 @@ function filterByTimeline(items: StockNews[], range: TimeRange): StockNews[] {
   });
 }
 
-export default function StockNewsPage() {
+function StockNewsPageContent() {
   const { ticker } = useParams<{ ticker: string }>();
   const searchParams = useSearchParams();
   const queryRange = searchParams.get("range");
@@ -212,5 +212,13 @@ export default function StockNewsPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function StockNewsPage() {
+  return (
+    <Suspense fallback={null}>
+      <StockNewsPageContent />
+    </Suspense>
   );
 }
