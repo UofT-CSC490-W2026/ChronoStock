@@ -28,11 +28,12 @@ def build_update_tickers() -> list[str]:
 
 def refresh_stock_bundle(ticker: str) -> None:
     bars = fetch_bars(ticker)
-    company_name, meta = fetch_info(ticker)
+    company_name, meta, asset_type = fetch_info(ticker)
 
     payload = StockResponse(
         ticker=ticker,
         companyName=company_name,
+        assetType=asset_type,
         bars=bars,
         events=[],
         meta=meta,
