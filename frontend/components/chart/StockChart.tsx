@@ -9,7 +9,6 @@ import {
   HistogramSeries,
   LineSeries,
   ColorType,
-  createSeriesMarkers,
   Time,
 } from "lightweight-charts";
 import { OHLCBar, NewsEvent } from "@/types";
@@ -36,12 +35,6 @@ interface StockChartProps {
   movingAverages?: MovingAverageSeries[];
 }
 
-const SENTIMENT_COLOR: Record<NewsEvent["sentiment"], string> = {
-  positive: "#22c55e",
-  negative: "#ef4444",
-  neutral: "#f59e0b",
-};
-
 const StockChart = forwardRef<StockChartHandle, StockChartProps>(
   ({ bars, events, activeEventTime, onChartEventHover, onViewChange, movingAverages }, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -56,6 +49,8 @@ const StockChart = forwardRef<StockChartHandle, StockChartProps>(
     onHoverRef.current = onChartEventHover;
     const onViewChangeRef = useRef(onViewChange);
     onViewChangeRef.current = onViewChange;
+    const eventsRef = useRef(events);
+    eventsRef.current = events;
 
     useImperativeHandle(ref, () => ({
       getXForTime: (time: string) =>
@@ -105,7 +100,7 @@ const StockChart = forwardRef<StockChartHandle, StockChartProps>(
       series.setData(bars.map((b) => ({ time: b.time as Time, value: b.close })));
       chartRef.current = chart;
       seriesRef.current = series;
-      requestAnimationFrame(() => chart.timeScale().fitContent());
+      const fitId = setTimeout(() => chart.timeScale().fitContent(), 0);
 
       // ── Volume pane ───────────────────────────────────────────────────────
       const volSeries = chart.addSeries(
@@ -137,18 +132,6 @@ const StockChart = forwardRef<StockChartHandle, StockChartProps>(
         panes[1].setStretchFactor(1);
       }
 
-      // ── Event markers (news + SEC filings) ───────────────────────────────
-      const allMarkers = events.map((ev) => ({
-        time: ev.time as Time,
-        position: "aboveBar" as const,
-        color: SENTIMENT_COLOR[ev.sentiment],
-        shape: ev.sentiment === "negative" ? ("arrowDown" as const) : ("arrowUp" as const),
-        text: ev.title.length > 22 ? ev.title.slice(0, 22) + "…" : ev.title,
-        size: 2,
-      }));
-
-      createSeriesMarkers(series, allMarkers);
-
       // Fire onViewChange on pan / zoom
       chart.timeScale().subscribeVisibleTimeRangeChange(() => {
         onViewChangeRef.current?.();
@@ -160,18 +143,20 @@ const StockChart = forwardRef<StockChartHandle, StockChartProps>(
 
       chart.subscribeCrosshairMove((param) => {
         if (!param.time) { onHoverRef.current(null); return; }
-        const hit = events.find((ev) => ev.time === param.time);
+        const hit = eventsRef.current.find((ev) => ev.time === param.time);
         onHoverRef.current(hit ?? null);
       });
 
       return () => {
+        clearTimeout(fitId);
         ro.disconnect();
         chart.remove();
+        chartRef.current = null;
         seriesRef.current = null;
         volumeSeriesRef.current = null;
         maSeriesRef.current = [];
       };
-    }, [bars, events]);
+    }, [bars]);
 
     // ── Moving average lines (separate effect — no chart flicker on toggle) ──
     useEffect(() => {

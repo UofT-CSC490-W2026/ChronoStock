@@ -10,7 +10,7 @@
  * In real mode the backend filters and only the requested slice is returned.
  */
 
-import { StockData } from "@/types";
+import { StockData, MarketSummary, MarketAnalysis, IndicatorHistory } from "@/types";
 
 // Stock data + search → real backend
 // Auth + watchlist → still mocked (linked later)
@@ -167,6 +167,26 @@ export async function resetPassword(token: string, new_password: string): Promis
     const data = await res.json().catch(() => ({}));
     throw new Error(data.detail ?? `API error ${res.status}`);
   }
+}
+
+export async function fetchMarketAnalysis(token: string): Promise<MarketAnalysis> {
+  const res = await fetch(`${API_BASE}/api/market-analysis`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`);
+  return res.json() as Promise<MarketAnalysis>;
+}
+
+export async function fetchMarketSummary(): Promise<MarketSummary> {
+  const res = await fetch(`${API_BASE}/api/market-summary`);
+  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`);
+  return res.json() as Promise<MarketSummary>;
+}
+
+export async function fetchIndicatorHistory(name: string): Promise<IndicatorHistory> {
+  const res = await fetch(`${API_BASE}/api/indicator/${encodeURIComponent(name)}`);
+  if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`);
+  return res.json() as Promise<IndicatorHistory>;
 }
 
 export async function removeFromWatchlist(ticker: string, token: string): Promise<void> {

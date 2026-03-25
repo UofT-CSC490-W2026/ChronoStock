@@ -81,6 +81,8 @@ export default function StockPage() {
   const [news, setNews] = useState<StockNews[]>([]);
   const [earnings, setEarnings] = useState<EarningsDate[]>([]);
   const [secFilings, setSecFilings] = useState<SECFiling[]>([]);
+  const [showKeyEvents, setShowKeyEvents] = useState(true);
+  const [expandKeyEvents, setExpandKeyEvents] = useState(false);
   const [showEarnings, setShowEarnings] = useState(false);
   const [show8K, setShow8K] = useState(false);
   const [showForm4, setShowForm4] = useState(false);
@@ -96,6 +98,10 @@ export default function StockPage() {
   const [expanded8K, setExpanded8K] = useState<string | null>(null);
   const [eightKPositions, setEightKPositions] = useState<
     { date: string; x: number; y: number; filings: SECFiling[] }[]
+  >([]);
+  const [expandedKeyEvent, setExpandedKeyEvent] = useState<string | null>(null);
+  const [keyEventPositions, setKeyEventPositions] = useState<
+    { date: string; x: number; y: number; event: NewsEvent }[]
   >([]);
 
   const [inWatchlist, setInWatchlist] = useState(false);
@@ -197,6 +203,8 @@ export default function StockPage() {
   form4ByDateRef.current = form4ByDate;
   const eightKByDateRef = useRef<{ date: string; filings: SECFiling[] }[]>([]);
   eightKByDateRef.current = eightKByDate;
+  const filteredEventsRef = useRef<NewsEvent[]>([]);
+  filteredEventsRef.current = filteredEvents;
 
   // Stable callback — called on every pan / zoom / resize and on data change
   const computeEarningPositions = useCallback(() => {
@@ -293,6 +301,31 @@ export default function StockPage() {
     const timer = setTimeout(compute8KPositions, 250);
     return () => clearTimeout(timer);
   }, [eightKByDate, range, compute8KPositions]);
+
+  const computeKeyEventPositions = useCallback(() => {
+    if (!chartRef.current || !chartContainerRef.current) return;
+    const rect = chartContainerRef.current.getBoundingClientRect();
+    const chartWidth = chartContainerRef.current.clientWidth;
+    const chartHeight = chartContainerRef.current.clientHeight;
+    const currentBars = filteredBarsRef.current;
+
+    const positions = filteredEventsRef.current.flatMap((ev) => {
+      const bar = currentBars.find((b) => b.time >= ev.time) ?? null;
+      if (!bar) return [];
+      const pos = chartRef.current!.getPositionForDate(bar.time, bar.close);
+      if (!pos) return [];
+      if (pos.x < 0 || pos.x > chartWidth - 70) return [];
+      if (pos.y < 0 || pos.y > chartHeight) return [];
+      return [{ date: ev.time, x: rect.left + pos.x, y: rect.top + pos.y, event: ev }];
+    });
+    setKeyEventPositions(positions);
+  }, []);
+
+  useEffect(() => {
+    if (!filteredEvents.length) { setKeyEventPositions([]); return; }
+    const timer = setTimeout(computeKeyEventPositions, 250);
+    return () => clearTimeout(timer);
+  }, [filteredEvents, computeKeyEventPositions]);
 
   // SMA computation
   const movingAverages = useMemo(() => {
@@ -531,10 +564,10 @@ export default function StockPage() {
               <StockChart
                 ref={chartRef}
                 bars={filteredBars}
-                events={filteredEvents}
+                events={showKeyEvents ? filteredEvents : []}
                 activeEventTime={activeEvent?.time ?? null}
                 onChartEventHover={handleChartEventHover}
-                onViewChange={() => { computeEarningPositions(); computeForm4Positions(); compute8KPositions(); }}
+                onViewChange={() => { computeEarningPositions(); computeForm4Positions(); compute8KPositions(); computeKeyEventPositions(); }}
                 movingAverages={movingAverages}
               />
             </div>
@@ -589,23 +622,26 @@ export default function StockPage() {
 
           {/* Sidebar */}
           <aside className="w-80 shrink-0 border-l border-slate-800 overflow-y-auto">
-            {user && isEquity && (
-              <div className="p-4 border-b border-slate-800">
-                <EventPanel
-                  events={filteredEvents}
-                  activeEvent={activeEvent}
-                  onCardHover={handleCardHover}
-                  onCardClick={handleCardClick}
-                  expandedId={expandedId}
-                />
-              </div>
-            )}
             {isEquity && (
               <>
                 <div className="border-b border-slate-800">
                   <div className="px-4 pt-3 pb-2">
                     <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-2">Chart Overlays</p>
                     <div className="flex flex-col gap-1">
+                      {filteredEvents.length > 0 && (
+                        <div className="flex items-center justify-between py-1.5">
+                          <div className="flex items-center gap-2 text-slate-400">
+                            <Newspaper className="w-3.5 h-3.5" />
+                            <span className="text-xs text-slate-300">Key Events</span>
+                          </div>
+                          <button
+                            onClick={() => setShowKeyEvents((v) => !v)}
+                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${showKeyEvents ? "bg-indigo-600" : "bg-slate-700"}`}
+                          >
+                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${showKeyEvents ? "translate-x-5" : "translate-x-1"}`} />
+                          </button>
+                        </div>
+                      )}
                       {earnings.length > 0 && (
                         <div className="flex items-center justify-between py-1.5">
                           <div className="flex items-center gap-2 text-slate-400">
@@ -658,6 +694,33 @@ export default function StockPage() {
                     </div>
                   </div>
                 </div>
+                {user && showKeyEvents && filteredEvents.length > 0 && (
+                  <div className="border-b border-slate-800">
+                    <button
+                      onClick={() => setExpandKeyEvents((v) => !v)}
+                      className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-900/50 transition-colors"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Key Events Detail</p>
+                      <svg
+                        className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${expandKeyEvents ? "rotate-180" : ""}`}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {expandKeyEvents && (
+                      <div className="px-4 pb-3">
+                        <EventPanel
+                          events={filteredEvents}
+                          activeEvent={activeEvent}
+                          onCardHover={handleCardHover}
+                          onCardClick={handleCardClick}
+                          expandedId={expandedId}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
                 <SECPanel filings={secFilings} />
               </>
             )}
@@ -839,6 +902,68 @@ export default function StockPage() {
                         </a>
                       ))}
                     </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Key event badges — equity only */}
+          {isEquity && showKeyEvents && keyEventPositions.map((pos) => {
+            const SENTIMENT_COLOR: Record<string, string> = {
+              positive: "#22c55e",
+              negative: "#ef4444",
+              neutral: "#f59e0b",
+            };
+            const colorHex = SENTIMENT_COLOR[pos.event.sentiment] ?? "#f59e0b";
+            const isExpanded = expandedKeyEvent === pos.event.id;
+
+            return (
+              <div
+                key={pos.event.id}
+                className="fixed z-30 pointer-events-none"
+                style={{ left: pos.x - 10, top: pos.y - 10, width: 20, height: 20 }}
+              >
+                <div
+                  className="pointer-events-auto cursor-pointer w-5 h-5 rounded-full flex items-center justify-center transition-transform hover:scale-125"
+                  title={pos.event.title}
+                  onClick={() => setExpandedKeyEvent(isExpanded ? null : pos.event.id)}
+                  style={{
+                    backgroundColor: "#0f172a",
+                    border: `1.5px solid ${colorHex}`,
+                    boxShadow: `0 0 8px 2px ${colorHex}55`,
+                    color: colorHex,
+                  }}
+                >
+                  <Newspaper style={{ width: 10, height: 10 }} />
+                </div>
+
+                {isExpanded && (
+                  <div
+                    className="pointer-events-auto absolute w-64 rounded-xl border border-slate-700 bg-slate-900 shadow-xl p-3 text-xs"
+                    style={{ bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)" }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <p className="font-semibold mb-1" style={{ color: colorHex }}>
+                      {pos.event.sentiment === "positive" ? "Positive" : pos.event.sentiment === "negative" ? "Negative" : "Neutral"} Event
+                    </p>
+                    <p className="text-slate-400 font-mono mb-2">{pos.event.time}</p>
+                    <p className="text-slate-200 leading-relaxed mb-2">{pos.event.title}</p>
+                    {pos.event.sentimentReasoning && (
+                      <p className="text-slate-400 leading-relaxed mb-2">{pos.event.sentimentReasoning}</p>
+                    )}
+                    <p className="text-[10px] text-slate-500">{pos.event.source}</p>
+                    {pos.event.url && (
+                      <a
+                        href={pos.event.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors"
+                      >
+                        <ExternalLink style={{ width: 10, height: 10 }} />
+                        Read full article
+                      </a>
+                    )}
                   </div>
                 )}
               </div>

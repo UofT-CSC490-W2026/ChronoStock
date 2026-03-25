@@ -15,6 +15,7 @@ export interface NewsEvent {
   sentiment: "positive" | "negative" | "neutral";
   source: string;
   url?: string;
+  sentimentReasoning?: string;
 }
 
 export interface StockMeta {
@@ -47,4 +48,56 @@ export interface StockData {
   bars: OHLCBar[];
   events: NewsEvent[];
   meta?: StockMeta;
+}
+
+export interface IndicatorHistory {
+  name: string;
+  unit: string;
+  data: { time: string; value: number }[];
+  cachedAt: string;
+}
+
+export interface MacroIndicator {
+  name: string;
+  value: number;
+  previousValue?: number;
+  change?: number;
+  changePct?: number;
+  unit: string;
+  description: string;
+  source: string;
+  asOf: string;
+}
+
+export interface MacroCategory {
+  name: string;
+  indicators: MacroIndicator[];
+}
+
+export interface MarketSummary {
+  categories: MacroCategory[];
+  cachedAt: string;
+}
+
+export interface KeyDriver {
+  title: string;
+  explanation: string;
+  sentiment: "positive" | "negative" | "neutral";
+}
+
+export interface WatchIndicator {
+  indicator: string;
+  currentSignal: string;
+  whyItMatters: string;
+}
+
+export interface MarketAnalysis {
+  regime: string;
+  regimeSentiment: "bullish" | "bearish" | "neutral" | "mixed";
+  summary: string;
+  narrative: string;
+  keyDrivers: KeyDriver[];
+  historicalContext: string;
+  watchlist: WatchIndicator[];
+  generatedAt: string;
 }

@@ -46,15 +46,11 @@ export default function EventPanel({
 
   return (
     <div className="flex flex-col gap-2 pr-1">
-      <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-1 shrink-0">
-        Key Events
-      </p>
-
       {events.length === 0 && (
         <p className="text-sm text-slate-600 mt-4">No events for this period.</p>
       )}
 
-      {events.map((ev) => {
+      {[...events].reverse().map((ev) => {
         const isActive = activeEvent?.id === ev.id;
         const isExpanded = expandedId === ev.id;
 
@@ -100,6 +96,12 @@ export default function EventPanel({
             {isExpanded && (
               <div className="px-3 pb-3 border-t border-white/10 pt-2">
                 <p className="text-xs text-slate-300 leading-relaxed">{ev.summary}</p>
+                {ev.sentimentReasoning && (
+                  <div className="mt-2 rounded-lg bg-slate-800/60 px-2.5 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Sentiment Analysis</p>
+                    <p className="text-xs text-slate-400 leading-relaxed">{ev.sentimentReasoning}</p>
+                  </div>
+                )}
                 {ev.url && (
                   <a
                     href={ev.url}

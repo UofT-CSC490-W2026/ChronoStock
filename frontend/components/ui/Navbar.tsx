@@ -34,6 +34,12 @@ export default function Navbar({ showSearch = false }: { showSearch?: boolean })
       >
         Compare
       </Link>
+      <Link
+        href="/market"
+        className="text-sm text-slate-400 hover:text-slate-200 transition-colors px-1 shrink-0"
+      >
+        Market
+      </Link>
       {user && (
         <Link
           href="/watchlist"

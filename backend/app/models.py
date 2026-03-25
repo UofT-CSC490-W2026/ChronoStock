@@ -19,6 +19,7 @@ class NewsEvent(BaseModel):
     sentiment: Literal["positive", "negative", "neutral"]
     source: str
     url: str | None = None
+    sentimentReasoning: str | None = None
 
 
 class StockMeta(BaseModel):
@@ -117,3 +118,60 @@ class SECFiling(BaseModel):
     items: list[str]    # ["1.01", "5.02"] — empty for Form 4
     label: str          # human-readable event description
     url: str            # full sec.gov filing URL
+
+
+class IndicatorDataPoint(BaseModel):
+    time: str    # "YYYY-MM-DD"
+    value: float
+
+
+class IndicatorHistory(BaseModel):
+    name: str
+    unit: str
+    data: list[IndicatorDataPoint]
+    cachedAt: str  # ISO-8601 UTC
+
+
+class MacroIndicator(BaseModel):
+    name: str
+    value: float
+    previousValue: Optional[float] = None
+    change: Optional[float] = None
+    changePct: Optional[float] = None   # meaningful for market prices; None for rates/spreads
+    unit: str                           # e.g. "%", "pts", "$/oz", "K jobs", "% YoY"
+    description: str
+    source: str                         # "FRED" | "Yahoo Finance"
+    asOf: str                           # "YYYY-MM-DD"
+
+
+class MacroCategory(BaseModel):
+    name: str
+    indicators: list[MacroIndicator]
+
+
+class MarketSummary(BaseModel):
+    categories: list[MacroCategory]
+    cachedAt: str                       # ISO-8601 UTC timestamp
+
+
+class KeyDriver(BaseModel):
+    title: str
+    explanation: str
+    sentiment: Literal["positive", "negative", "neutral"]
+
+
+class WatchIndicator(BaseModel):
+    indicator: str
+    currentSignal: str
+    whyItMatters: str
+
+
+class MarketAnalysis(BaseModel):
+    regime: str
+    regimeSentiment: Literal["bullish", "bearish", "neutral", "mixed"]
+    summary: str
+    narrative: str
+    keyDrivers: list[KeyDriver]
+    historicalContext: str
+    watchlist: list[WatchIndicator]
+    generatedAt: str                    # ISO-8601 UTC timestamp

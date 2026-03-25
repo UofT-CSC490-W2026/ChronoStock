@@ -1,7 +1,8 @@
 import os
 import uuid
+from pathlib import Path
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
 from datetime import datetime, timezone
 from datetime import date, timedelta
 from typing import Literal
@@ -12,7 +13,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from .models import OHLCBar, StockResponse, SearchResult, UserCreate, Token, WatchlistItem, TrendingItem, StockNews, EarningsDate, SECFiling, ForgotPasswordRequest, ResetPasswordRequest, MessageResponse
+from .models import OHLCBar, StockResponse, SearchResult, UserCreate, Token, WatchlistItem, TrendingItem, StockNews, EarningsDate, SECFiling, ForgotPasswordRequest, ResetPasswordRequest, MessageResponse, MarketSummary, MarketAnalysis, IndicatorHistory
 from .stock import fetch_bars, fetch_info, search_tickers, fetch_news, fetch_earnings_dates
 from .edgar import fetch_sec_filings
 from . import cache
@@ -128,12 +129,13 @@ def get_stock(
         except Exception as e:
             raise HTTPException(status_code=502, detail=f"Data provider error: {e}")
 
+        from .demo_events import get_demo_events
         full = StockResponse(
             ticker=ticker,
             companyName=company_name,
             assetType=asset_type,
             bars=bars,
-            events=[],  # AI layer plugs in here later
+            events=get_demo_events(ticker),
             meta=meta,
         )
         payload = full.model_dump()
@@ -287,6 +289,107 @@ def get_sec_filings(request: Request, ticker: str):
         "items": [item.model_dump() for item in items],
     })
     return items
+
+
+@app.get("/api/market-summary", response_model=MarketSummary)
+@limiter.limit("30/minute")
+def get_market_summary(request: Request):
+    CACHE_KEY = "market:summary"
+    CACHE_TTL_HOURS = 6
+
+    cached = cache.get(CACHE_KEY)
+    if cached:
+        cached_at_str = cached.get("cachedAt")
+        if cached_at_str:
+            cached_at = datetime.fromisoformat(cached_at_str)
+            if cached_at.tzinfo is None:
+                cached_at = cached_at.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - cached_at < timedelta(hours=CACHE_TTL_HOURS):
+                return MarketSummary(**cached)
+
+    try:
+        from .macro import fetch_market_summary
+        summary = fetch_market_summary()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Macro data fetch error: {e}")
+
+    cache.set(CACHE_KEY, summary.model_dump())
+    return summary
+
+
+@app.get("/api/indicator/{name}", response_model=IndicatorHistory)
+@limiter.limit("30/minute")
+def get_indicator_history(name: str, request: Request):
+    CACHE_TTL_HOURS = 24
+    safe_name = (
+        name.lower()
+        .replace(" ", "_")
+        .replace("/", "_")
+        .replace("(", "")
+        .replace(")", "")
+    )
+    CACHE_KEY = f"indicator:{safe_name}"
+
+    cached = cache.get(CACHE_KEY)
+    if cached:
+        cached_at_str = cached.get("cachedAt")
+        if cached_at_str:
+            cached_at = datetime.fromisoformat(cached_at_str)
+            if cached_at.tzinfo is None:
+                cached_at = cached_at.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - cached_at < timedelta(hours=CACHE_TTL_HOURS):
+                return IndicatorHistory(**cached)
+
+    from .macro import fetch_indicator_history, INDICATOR_MAP
+    if name not in INDICATOR_MAP:
+        raise HTTPException(status_code=404, detail=f"Unknown indicator: {name}")
+
+    try:
+        history = fetch_indicator_history(name)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Indicator fetch error: {e}")
+
+    cache.set(CACHE_KEY, history.model_dump())
+    return history
+
+
+@app.get("/api/market-analysis", response_model=MarketAnalysis)
+@limiter.limit("10/minute")
+def get_market_analysis(request: Request, current_user: dict = Depends(get_current_user)):
+    CACHE_KEY = "market:analysis"
+    CACHE_TTL_HOURS = 12
+
+    cached = cache.get(CACHE_KEY)
+    if cached:
+        cached_at_str = cached.get("generatedAt")
+        if cached_at_str:
+            cached_at = datetime.fromisoformat(cached_at_str)
+            if cached_at.tzinfo is None:
+                cached_at = cached_at.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - cached_at < timedelta(hours=CACHE_TTL_HOURS):
+                return MarketAnalysis(**cached)
+
+    # Re-use the already-cached macro summary if available so we don't re-fetch
+    macro_cached = cache.get("market:summary")
+    if macro_cached:
+        summary = MarketSummary(**macro_cached)
+    else:
+        try:
+            from .macro import fetch_market_summary
+            summary = fetch_market_summary()
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"Macro data fetch error: {e}")
+
+    try:
+        from .analysis import generate_market_analysis
+        analysis = generate_market_analysis(summary)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=502, detail=f"Analysis generation error: {type(e).__name__}: {e}")
+
+    cache.set(CACHE_KEY, analysis.model_dump())
+    return analysis
 
 
 @app.get("/api/search", response_model=list[SearchResult])
