@@ -18,6 +18,14 @@ def _tickers_from_env() -> list[str]:
     return [ticker.strip().upper() for ticker in raw.split(",") if ticker.strip()]
 
 
+def build_update_tickers() -> list[str]:
+    env_tickers = _tickers_from_env()
+    trending_tickers = refresh_trending()
+
+    # Keep explicit tickers first, then append trending names without duplicates.
+    return list(dict.fromkeys(env_tickers + trending_tickers))
+
+
 def refresh_stock_bundle(ticker: str) -> None:
     bars = fetch_bars(ticker)
     company_name, meta = fetch_info(ticker)
@@ -117,11 +125,7 @@ def refresh_trending() -> list[str]:
 
 
 def main() -> None:
-    env_tickers = _tickers_from_env()
-    trending_tickers = refresh_trending()
-
-    # Keep explicit tickers first, then append trending names without duplicates.
-    tickers = list(dict.fromkeys(env_tickers + trending_tickers))
+    tickers = build_update_tickers()
     refresh_prices(tickers)
 
     for ticker in tickers:

@@ -48,6 +48,8 @@ touch /home/ec2-user/backend.log
 chown ec2-user:ec2-user /home/ec2-user/backend.log
 touch /home/ec2-user/daily_update.log
 chown ec2-user:ec2-user /home/ec2-user/daily_update.log
+touch /home/ec2-user/hourly_update.log
+chown ec2-user:ec2-user /home/ec2-user/hourly_update.log
 
 ############################################
 # Configure CloudWatch Agent
@@ -67,6 +69,11 @@ cat <<EOT > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
             "file_path": "/home/ec2-user/daily_update.log",
             "log_group_name": "${log_group_name}",
             "log_stream_name": "{instance_id}-daily-update"
+          },
+          {
+            "file_path": "/home/ec2-user/hourly_update.log",
+            "log_group_name": "${log_group_name}",
+            "log_stream_name": "{instance_id}-hourly-update"
           }
         ]
       }
@@ -110,6 +117,19 @@ set -e
 EOF
 chmod +x /home/ec2-user/run_daily_update.sh
 chown ec2-user:ec2-user /home/ec2-user/run_daily_update.sh
+
+cat <<'EOF' > /home/ec2-user/run_hourly_update.sh
+#!/bin/bash
+set -e
+/usr/bin/docker pull zihan123/chronostock-backend:latest
+/usr/bin/docker run --rm \
+  --env-file /home/ec2-user/backend.env \
+  -e DAILY_UPDATE_TICKERS="AAPL,MSFT,NVDA,TSLA" \
+  zihan123/chronostock-backend:latest \
+  python -m app.run_hourly_update
+EOF
+chmod +x /home/ec2-user/run_hourly_update.sh
+chown ec2-user:ec2-user /home/ec2-user/run_hourly_update.sh
 
 ############################################
 # Initial backend deploy

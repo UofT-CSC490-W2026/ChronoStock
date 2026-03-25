@@ -145,13 +145,13 @@ module "ec2" {
   public_subnet_id   = module.vpc.public_subnet_ids[0]
   security_group_ids = [module.security_group.ec2_sg_id]
 
-  db_host        = module.rds.db_host
-  db_port        = module.rds.db_port
-  db_name        = var.db_name
-  aws_region     = var.aws_region
-  log_group_name = aws_cloudwatch_log_group.pipeline_logs.name
-  secret_name    = var.secret_name
-  frontend_url   = var.frontend_url
+  db_host           = module.rds.db_host
+  db_port           = module.rds.db_port
+  db_name           = var.db_name
+  aws_region        = var.aws_region
+  log_group_name    = aws_cloudwatch_log_group.pipeline_logs.name
+  secret_name       = var.secret_name
+  frontend_url      = var.frontend_url
   secret_policy_arn = aws_iam_policy.secrets_policy.arn
   s3_policy_arn     = aws_iam_policy.s3_limited_policy.arn
   tags = {
@@ -208,6 +208,31 @@ resource "aws_scheduler_schedule" "daily_pipeline" {
       Parameters = {
         commands = [
           "/home/ec2-user/run_daily_update.sh >> /home/ec2-user/daily_update.log 2>&1"
+        ]
+      }
+    })
+  }
+}
+
+resource "aws_scheduler_schedule" "hourly_prices" {
+  name                         = "stock-pipeline-hourly-prices"
+  schedule_expression          = "cron(0 * * * ? *)"
+  schedule_expression_timezone = "America/Toronto"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  target {
+    arn      = "arn:aws:scheduler:::aws-sdk:ssm:sendCommand"
+    role_arn = aws_iam_role.scheduler_role.arn
+
+    input = jsonencode({
+      DocumentName = "AWS-RunShellScript"
+      InstanceIds  = [module.ec2.instance_id]
+      Parameters = {
+        commands = [
+          "/home/ec2-user/run_hourly_update.sh >> /home/ec2-user/hourly_update.log 2>&1"
         ]
       }
     })
