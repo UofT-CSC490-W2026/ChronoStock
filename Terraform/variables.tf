@@ -17,6 +17,12 @@ variable "bucket_name" {
   type = string
 }
 
+variable "pipeline_source_bucket_name" {
+  description = "Optional extra S3 bucket that EC2 pipeline jobs can read/write."
+  type        = string
+  default     = ""
+}
+
 variable "db_username" {
   type = string
 }

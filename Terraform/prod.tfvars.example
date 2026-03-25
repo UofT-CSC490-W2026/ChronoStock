@@ -24,5 +24,6 @@ db_user     = "postgres"
 db_username = "postgres"
 
 bucket_name = "s3-stock-pipeline-data-prod"
+pipeline_source_bucket_name = "s3-stock-pipeline-data-prod"
 
 secret_name = "chrono-stock-rds-secret-dev"

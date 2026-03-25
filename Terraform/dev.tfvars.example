@@ -9,6 +9,7 @@ db_name     = "example_database"
 db_username = "example_user"
 
 bucket_name     = "example-stock-pipeline-data-dev"
+pipeline_source_bucket_name = "example-source-data-bucket"
 polygon_api_key = "your-polygon-api-key"
 
 secret_name    = "example-rds-secret-name"

@@ -81,6 +81,18 @@ module "s3" {
   bucket_name = var.bucket_name
 }
 
+locals {
+  pipeline_bucket_arns = concat(
+    [module.s3.bucket_arn],
+    var.pipeline_source_bucket_name != "" ? ["arn:aws:s3:::${var.pipeline_source_bucket_name}"] : []
+  )
+
+  pipeline_object_arns = concat(
+    ["${module.s3.bucket_arn}/*"],
+    var.pipeline_source_bucket_name != "" ? ["arn:aws:s3:::${var.pipeline_source_bucket_name}/*"] : []
+  )
+}
+
 resource "aws_iam_policy" "s3_limited_policy" {
   name = "stock-pipeline-s3-policy"
 
@@ -90,12 +102,12 @@ resource "aws_iam_policy" "s3_limited_policy" {
       {
         Effect   = "Allow"
         Action   = ["s3:ListBucket"]
-        Resource = module.s3.bucket_arn
+        Resource = local.pipeline_bucket_arns
       },
       {
         Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:PutObject"]
-        Resource = "${module.s3.bucket_arn}/*"
+        Resource = local.pipeline_object_arns
       }
     ]
   })

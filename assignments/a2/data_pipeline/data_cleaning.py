@@ -1,33 +1,56 @@
-import pandas as pd
-from difflib import SequenceMatcher
-import re
-from datetime import timedelta
+import io
 import os
-from sqlalchemy import create_engine, text
-from db import engine
-from sqlalchemy import inspect
+import re
+from difflib import SequenceMatcher
 
-def save_cleaned_to_rds(df, table_name, ticker_val):
-    """Saves cleaned DataFrame to RDS, replacing existing cleaned data for this ticker."""
-    if df.empty: return
-    try:
-        with engine.begin() as conn:
-            inspector = inspect(conn)
-            table_exists = inspector.has_table(table_name)
+import boto3
+import pandas as pd
 
-            if table_exists:
-                print(f"Cleaning existing data for {ticker_val} in {table_name}...")
-                conn.execute(
-                    text(f'DELETE FROM {table_name} WHERE ticker = :t'),
-                    {"t": ticker_val}
-                )
-                df.to_sql(table_name, conn, if_exists='append', index=False)
 
-            else:
-                print(f"Table {table_name} does not exist. It will be created.")
-                df.to_sql(table_name, conn, if_exists='replace', index=False)
-    except Exception as e:
-        print(f"Error saving to RDS: {e}")
+RAW_NEWS_PREFIX = os.environ.get("PIPELINE_RAW_NEWS_PREFIX", "raw/stock_news")
+CLEAN_NEWS_PREFIX = os.environ.get("PIPELINE_CLEAN_NEWS_PREFIX", "clean/stock_news_cleaned")
+
+
+def _require_bucket() -> str:
+    bucket = os.environ.get("PIPELINE_S3_BUCKET", "")
+    if not bucket:
+        raise ValueError("Missing PIPELINE_S3_BUCKET environment variable.")
+    return bucket
+
+
+def _s3_client():
+    region = os.environ.get("AWS_REGION")
+    if region:
+        return boto3.client("s3", region_name=region)
+    return boto3.client("s3")
+
+
+def _s3_key(prefix: str, filename: str) -> str:
+    clean_prefix = prefix.strip("/")
+    return f"{clean_prefix}/{filename}" if clean_prefix else filename
+
+
+def _load_csv_from_s3(prefix: str, ticker: str) -> pd.DataFrame:
+    bucket = _require_bucket()
+    key = _s3_key(prefix, f"{ticker}.csv")
+    response = _s3_client().get_object(Bucket=bucket, Key=key)
+    return pd.read_csv(io.BytesIO(response["Body"].read()))
+
+
+def save_cleaned_to_s3(df: pd.DataFrame, prefix: str, ticker_val: str) -> None:
+    if df.empty:
+        return
+
+    bucket = _require_bucket()
+    key = _s3_key(prefix, f"{ticker_val}.csv")
+    _s3_client().put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=df.to_csv(index=False).encode("utf-8"),
+        ContentType="text/csv",
+    )
+    print(f"Saved {len(df)} cleaned rows to s3://{bucket}/{key}")
+
 
 def clean_stock_news(ticker, ticker_keywords):
     """
@@ -38,93 +61,76 @@ def clean_stock_news(ticker, ticker_keywords):
     """
     print(f"--- Cleaning News for {ticker} ---")
     try:
-        query = text("SELECT * FROM stock_news WHERE ticker = :ticker")
-        df = pd.read_sql(query, engine, params={"ticker": ticker})
+        df = _load_csv_from_s3(RAW_NEWS_PREFIX, ticker)
     except Exception as e:
-        print(f"Error loading from DB: {e}")
+        print(f"Error loading raw news from S3: {e}")
         return
 
     if df.empty:
-        print(f"No news found for {ticker} in database.")
+        print(f"No news found for {ticker}.")
         return
 
-    df['published_utc'] = pd.to_datetime(df['published_utc'], utc=True)
-    df['description'] = df['description'].fillna('')
-    df['title'] = df['title'].fillna('')
+    df["published_utc"] = pd.to_datetime(df["published_utc"], utc=True, errors="coerce")
+    df = df.dropna(subset=["published_utc", "id"])
+    df["description"] = df["description"].fillna("")
+    df["title"] = df["title"].fillna("")
 
-    # --- Step 1: Relevance Filtering ---
-    print(f"Filtering for keywords")
-    
+    print("Filtering for keywords")
+
     def is_relevant(row):
-        text = (str(row['title']) + " " + str(row['description'])).lower()
+        text = (str(row["title"]) + " " + str(row["description"])).lower()
         return any(keyword in text for keyword in ticker_keywords)
 
     df_relevant = df[df.apply(is_relevant, axis=1)].copy()
     print(f"Rows remaining after relevance filter: {len(df_relevant)}")
 
-    # --- Step 2: Time-based Deduplication ---
-    # Sort by date to compare sequential articles
     print("Deduplicating similar articles...")
-    df_relevant = df_relevant.sort_values('published_utc')
-    df_relevant = df_relevant.reset_index(drop=True)
-    
+    df_relevant = df_relevant.sort_values("published_utc").reset_index(drop=True)
+
     keep_mask = [True] * len(df_relevant)
-    titles = df_relevant['title'].tolist()
-    dates = df_relevant['published_utc'].tolist()
+    titles = df_relevant["title"].tolist()
+    dates = df_relevant["published_utc"].tolist()
 
     for i in range(1, len(df_relevant)):
-        # Calculate time difference in hours
-        time_diff = (dates[i] - dates[i-1]).total_seconds() / 3600
-        
-        # If articles are within 24 hours of each other
+        time_diff = (dates[i] - dates[i - 1]).total_seconds() / 3600
         if time_diff < 24:
-            # Check title similarity ratio (0.0 to 1.0)
-            similarity_ratio = SequenceMatcher(None, titles[i], titles[i-1]).ratio()
-            
-            # If highly similar (>80%), mark the current one for removal
-            # (Keeping the earlier one is usually safer for event detection)
-            if similarity_ratio > 0.8: 
+            similarity_ratio = SequenceMatcher(None, titles[i], titles[i - 1]).ratio()
+            if similarity_ratio > 0.8:
                 keep_mask[i] = False
-    
+
     df_deduped = df_relevant[keep_mask].copy()
     print(f"Rows remaining after deduplication: {len(df_deduped)}")
 
-    # --- Step 3: Noise/Opinion Removal ---
-    # Remove articles that are likely analysis rather than news events
     print("Removing opinion and analysis pieces...")
-    
     noise_patterns = [
-        r'^Why\b',                # "Why Amazon stock..."
-        r'^Is\b',                 # "Is it time to buy..."
-        r'^Should\b',             # "Should you buy..."
-        r'Better Buy\b',          # "Better Buy: Amazon vs..."
-        r'Top Analyst Reports\b', # "Top Analyst Reports for..."
-        r'Stock Market Today\b',  # Generic market updates
-        r'Earnings Preview\b',    # Pre-event speculation
-        r'Price Over Earnings\b', # Technical analysis
-        r'What\b',                # "What you need to know..."
-        r'Here\'s Why\b',         # "Here's Why..."
-        r'Prediction\b'           # "Price Prediction..."
+        r"^Why\b",
+        r"^Is\b",
+        r"^Should\b",
+        r"Better Buy\b",
+        r"Top Analyst Reports\b",
+        r"Stock Market Today\b",
+        r"Earnings Preview\b",
+        r"Price Over Earnings\b",
+        r"What\b",
+        r"Here\'s Why\b",
+        r"Prediction\b",
     ]
-    
-    # Compile regex pattern (case-insensitive)
-    noise_regex = re.compile('|'.join(noise_patterns), re.IGNORECASE)
-    
-    # Filter out rows matching the noise patterns
-    df_final = df_deduped[~df_deduped['title'].str.contains(noise_regex)].copy()
+
+    noise_regex = re.compile("|".join(noise_patterns), re.IGNORECASE)
+    df_final = df_deduped[~df_deduped["title"].str.contains(noise_regex, na=False)].copy()
+    df_final["published_utc"] = df_final["published_utc"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     print(f"Final row count: {len(df_final)}")
 
-    # --- Step 4: Save Output ---
-    save_cleaned_to_rds(df_final, "stock_news_cleaned", ticker)
+    save_cleaned_to_s3(df_final, CLEAN_NEWS_PREFIX, ticker)
+
 
 if __name__ == "__main__":
-
     TICKERS = {
-        "AMZN": ['amazon', 'amzn', 'aws', 'jeff bezos', 'andy jassy'],
-        "AAPL": ['apple', 'aapl', 'iphone', 'tim cook'],
-        "GOOGL": ['google', 'alphabet', 'googl', 'sundar pichai'],
-        "MSFT": ['microsoft', 'msft', 'azure', 'satya nadella'],
-        "TSLA": ['tesla', 'tsla', 'elon musk']
+        "AMZN": ["amazon", "amzn", "aws", "jeff bezos", "andy jassy"],
+        "AAPL": ["apple", "aapl", "iphone", "tim cook"],
+        "GOOGL": ["google", "alphabet", "googl", "sundar pichai"],
+        "MSFT": ["microsoft", "msft", "azure", "satya nadella"],
+        "TSLA": ["tesla", "tsla", "elon musk"],
     }
 
     for ticker, keywords in TICKERS.items():

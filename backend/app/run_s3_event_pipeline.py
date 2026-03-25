@@ -44,17 +44,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bucket", default=os.environ.get("PIPELINE_S3_BUCKET"))
     parser.add_argument(
         "--stock-prefix",
-        default=os.environ.get("PIPELINE_STOCK_PREFIX", "stock_prices"),
+        default=os.environ.get("PIPELINE_STOCK_PREFIX", "raw/stock_prices"),
         help="S3 prefix containing per-ticker stock CSVs.",
     )
     parser.add_argument(
         "--market-prefix",
-        default=os.environ.get("PIPELINE_MARKET_PREFIX", "stock_prices"),
+        default=os.environ.get("PIPELINE_MARKET_PREFIX", "raw/stock_prices"),
         help="S3 prefix containing benchmark CSVs.",
     )
     parser.add_argument(
         "--news-prefix",
-        default=os.environ.get("PIPELINE_NEWS_PREFIX", "stock_news_cleaned"),
+        default=os.environ.get("PIPELINE_NEWS_PREFIX", "clean/stock_news_cleaned"),
         help="S3 prefix containing cleaned news CSVs.",
     )
     parser.add_argument(
