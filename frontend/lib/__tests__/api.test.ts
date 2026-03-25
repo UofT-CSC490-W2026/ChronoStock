@@ -11,6 +11,9 @@ import {
   resetPassword,
   removeFromWatchlist,
   searchTickers,
+  fetchMarketAnalysis,
+  fetchMarketSummary,
+  fetchIndicatorHistory,
 } from "@/lib/api";
 
 describe("API Functions", () => {
@@ -340,6 +343,73 @@ describe("API Functions", () => {
       });
 
       await expect(resetPassword("token-123", "new-password")).rejects.toThrow("API error 400");
+    });
+  });
+
+  describe("market data requests", () => {
+    it("fetches market analysis with bearer auth", async () => {
+      const mockAnalysis = { regimeSentiment: "bullish", summary: "Risk-on" };
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockAnalysis,
+      });
+
+      await expect(fetchMarketAnalysis("token-123")).resolves.toEqual(mockAnalysis);
+      expect(global.fetch).toHaveBeenCalledWith("http://localhost:8000/api/market-analysis", {
+        headers: { Authorization: "Bearer token-123" },
+      });
+    });
+
+    it("throws a detailed error when market analysis fails", async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        statusText: "Service Unavailable",
+      });
+
+      await expect(fetchMarketAnalysis("token-123")).rejects.toThrow("API error 503: Service Unavailable");
+    });
+
+    it("fetches market summary", async () => {
+      const mockSummary = { categories: [], cachedAt: "2026-03-25T14:30:00Z" };
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockSummary,
+      });
+
+      await expect(fetchMarketSummary()).resolves.toEqual(mockSummary);
+      expect(global.fetch).toHaveBeenCalledWith("http://localhost:8000/api/market-summary");
+    });
+
+    it("throws a detailed error when market summary fails", async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        statusText: "Bad Gateway",
+      });
+
+      await expect(fetchMarketSummary()).rejects.toThrow("API error 502: Bad Gateway");
+    });
+
+    it("fetches indicator history with an encoded indicator name", async () => {
+      const mockHistory = { unit: "%", data: [{ time: "2026-01-01", value: 2.8 }] };
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockHistory,
+      });
+
+      await expect(fetchIndicatorHistory("CPI (YoY)")).resolves.toEqual(mockHistory);
+      expect(global.fetch).toHaveBeenCalledWith("http://localhost:8000/api/indicator/CPI%20(YoY)");
+    });
+
+    it("throws a detailed error when indicator history fails", async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: "Not Found",
+      });
+
+      await expect(fetchIndicatorHistory("Missing")).rejects.toThrow("API error 404: Not Found");
     });
   });
 });

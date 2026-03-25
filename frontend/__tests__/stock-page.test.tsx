@@ -190,7 +190,8 @@ describe("StockPage", () => {
 
     await user.click(screen.getByRole("button", { name: /^sma 20$/i }));
     await user.click(screen.getByRole("button", { name: /1m/i }));
-    await user.click(screen.getAllByRole("button", { name: "Earnings beat" })[0]);
+    await user.click(screen.getByRole("button", { name: /key events detail/i }));
+    await user.click(screen.getByRole("button", { name: "Earnings beat" }));
     expect(screen.getByText("expanded Earnings beat")).toBeInTheDocument();
 
     await user.click(screen.getByText(/hover earnings beat/i));
@@ -200,8 +201,9 @@ describe("StockPage", () => {
       jest.advanceTimersByTime(250);
     });
 
-    const earningsToggle = document.querySelector("button.relative.inline-flex.h-5.w-9") as HTMLButtonElement;
-    expect(earningsToggle).not.toBeNull();
+    const overlayToggles = document.querySelectorAll("button.relative.inline-flex.h-5.w-9");
+    expect(overlayToggles.length).toBeGreaterThanOrEqual(4);
+    const earningsToggle = overlayToggles[1] as HTMLButtonElement;
     await user.click(earningsToggle);
     await user.click(screen.getAllByTitle(/earnings report/i)[0]);
     expect(screen.getByText(/^Earnings Beat$/)).toBeInTheDocument();
@@ -240,10 +242,10 @@ describe("StockPage", () => {
     });
 
     const toggles = document.querySelectorAll("button.relative.inline-flex.h-5.w-9");
-    expect(toggles.length).toBeGreaterThanOrEqual(3);
+    expect(toggles.length).toBeGreaterThanOrEqual(4);
 
-    await user.click(toggles[1] as HTMLButtonElement);
     await user.click(toggles[2] as HTMLButtonElement);
+    await user.click(toggles[3] as HTMLButtonElement);
 
     expect(await screen.findByTitle("8-K Filing")).toBeInTheDocument();
     expect(await screen.findByTitle("Insider Transaction")).toBeInTheDocument();
@@ -258,7 +260,7 @@ describe("StockPage", () => {
     expect(screen.getAllByText(/n\/a for 5y\+/i).length).toBe(2);
 
     const updatedToggles = document.querySelectorAll("button.relative.inline-flex.h-5.w-9");
-    expect((updatedToggles[1] as HTMLButtonElement).disabled).toBe(true);
     expect((updatedToggles[2] as HTMLButtonElement).disabled).toBe(true);
+    expect((updatedToggles[3] as HTMLButtonElement).disabled).toBe(true);
   });
 });

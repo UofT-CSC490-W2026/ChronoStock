@@ -1,7 +1,7 @@
 import { createRef } from "react";
 import { render } from "@testing-library/react";
 import StockChart, { StockChartHandle } from "@/components/chart/StockChart";
-import { __getCharts, __getMarkers, __resetCharts } from "lightweight-charts";
+import { __getCharts, __resetCharts } from "lightweight-charts";
 
 jest.mock("lightweight-charts");
 
@@ -24,9 +24,6 @@ describe("StockChart", () => {
         events={[
           { id: "e1", time: "2026-03-02", title: "Headline", summary: "", sentiment: "negative", source: "Reuters" },
         ]}
-        secFilings={[
-          { date: "2026-03-02", form: "8-K", items: ["2.02"], label: "8-K", url: "https://example.com" },
-        ]}
         activeEventTime="2026-03-02"
         onChartEventHover={onHover}
         onViewChange={onViewChange}
@@ -38,7 +35,6 @@ describe("StockChart", () => {
 
     const chart = __getCharts()[0];
     expect(chart.addSeries).toHaveBeenCalledTimes(3);
-    expect(__getMarkers()).toHaveLength(1);
 
     chart.__visibleRangeHandler?.();
     expect(onViewChange).toHaveBeenCalled();

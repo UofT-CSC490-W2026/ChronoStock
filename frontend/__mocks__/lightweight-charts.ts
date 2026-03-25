@@ -14,6 +14,8 @@ interface MockChart {
     fitContent: jest.Mock<void, []>;
     timeToCoordinate: jest.Mock<number | null, [unknown]>;
     subscribeVisibleTimeRangeChange: jest.Mock<void, [VisibleRangeHandler]>;
+    subscribeVisibleLogicalRangeChange: jest.Mock<void, [VisibleRangeHandler]>;
+    setVisibleLogicalRange: jest.Mock<void, [{ from: number; to: number }]>;
   }>;
   subscribeCrosshairMove: jest.Mock<void, [CrosshairHandler]>;
   panes: jest.Mock<[{ setStretchFactor: jest.Mock<void, [number]> }, { setStretchFactor: jest.Mock<void, [number]> }], []>;
@@ -42,6 +44,10 @@ export const createChart = jest.fn(() => {
     subscribeVisibleTimeRangeChange: jest.fn((handler: VisibleRangeHandler) => {
       chart.__visibleRangeHandler = handler;
     }),
+    subscribeVisibleLogicalRangeChange: jest.fn((handler: VisibleRangeHandler) => {
+      chart.__visibleRangeHandler = handler;
+    }),
+    setVisibleLogicalRange: jest.fn(),
   };
 
   const chart: MockChart = {
