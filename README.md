@@ -22,7 +22,7 @@ _This section reports frontend Jest coverage and is updated automatically by Git
 <!-- backend-coverage:start -->
 ## Backend Test Coverage
 
-![Backend Coverage](https://img.shields.io/badge/backend%20coverage-4.22%25-red)
+![Backend Coverage](https://img.shields.io/badge/backend%20coverage-98.86%25-brightgreen)
 
 | Metric | Coverage |
 | --- | ---: |
