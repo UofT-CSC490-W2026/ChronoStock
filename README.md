@@ -29,7 +29,6 @@ _This section reports frontend Jest coverage and is updated automatically by Git
 | Lines | 4.22% |
 | Statements | 4.46% |
 | Branches | 3.38% |
-| Functions | N/A |
 
 _This section reports backend pytest-cov coverage and is updated automatically by GitHub Actions._
 <!-- backend-coverage:end -->
