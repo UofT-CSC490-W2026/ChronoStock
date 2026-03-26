@@ -18,7 +18,8 @@ DEFAULT_TICKERS = [
     "TSLA",
     "GOOGL",
     "META",
-    "JPM",
+    "AAPL",
+    "MSFT",
     "NVDA",
 ]
 
