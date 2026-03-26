@@ -134,15 +134,29 @@ class NewsLLMFilter:
         df = df.sort_values("event_date")
         batches = self.build_date_batches(df)
         selected_ids = []
+        failed_batches = []
 
         for index, batch in enumerate(batches, start=1):
             print(f"Processing batch {index}/{len(batches)} ({len(batch)} rows)")
             news_block = self.format_news_block(batch)
             prompt = PROMPT_TEMPLATE.format(news_block=news_block)
-            output = self.llm(prompt)[0]["generated_text"]
+            try:
+                output = self.llm(prompt)[0]["generated_text"]
+            except Exception as exc:
+                failed_batches.append(
+                    {
+                        "batch": index,
+                        "rows": len(batch),
+                        "error": str(exc),
+                    }
+                )
+                print(f"Skipping failed batch {index}/{len(batches)}: {exc}")
+                continue
             selected_ids.extend(self.extract_ids(output))
 
         selected_ids = list(set(selected_ids))
+        if failed_batches:
+            print(f"LLM filtering skipped {len(failed_batches)} failed batch(es).")
         return self.keep_one_per_day(df, selected_ids)
 
 

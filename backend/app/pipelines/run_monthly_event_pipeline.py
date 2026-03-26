@@ -143,28 +143,33 @@ def main() -> None:
     end_date = args.end_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     start_date = args.start_date or _rolling_five_year_start(end_date)
     incremental_start, incremental_end = _date_range_for_incremental(end_date, args.incremental_days)
+    failures = []
 
     if not args.skip_ingestion:
         print(f"Refreshing benchmark {args.benchmark_ticker} price history...")
         get_stockprice(args.benchmark_ticker, start_date, end_date, save_db=False, save_local=True)
 
         for ticker in tickers:
-            print(f"\n[monthly] Price refresh for {ticker}")
-            get_stockprice(ticker, start_date, end_date, save_db=False, save_local=True)
+            try:
+                print(f"\n[monthly] Price refresh for {ticker}")
+                get_stockprice(ticker, start_date, end_date, save_db=False, save_local=True)
 
-            print(f"\n[monthly] Incremental news ingestion for {ticker}: {incremental_start} -> {incremental_end}")
-            existing_raw = _read_s3_csv_or_empty(bucket, f"{RAW_NEWS_PREFIX}/{ticker}.csv")
-            fresh_raw = get_stocknews(
-                ticker,
-                incremental_start,
-                incremental_end,
-                api_key=polygon_api_key,
-                save_db=False,
-                save_local=False,
-            )
-            merged_raw = _merge_raw_news(existing_raw, fresh_raw, ticker)
-            if not merged_raw.empty:
-                save_to_s3(merged_raw, RAW_NEWS_PREFIX, f"{ticker}.csv")
+                print(f"\n[monthly] Incremental news ingestion for {ticker}: {incremental_start} -> {incremental_end}")
+                existing_raw = _read_s3_csv_or_empty(bucket, f"{RAW_NEWS_PREFIX}/{ticker}.csv")
+                fresh_raw = get_stocknews(
+                    ticker,
+                    incremental_start,
+                    incremental_end,
+                    api_key=polygon_api_key,
+                    save_db=False,
+                    save_local=False,
+                )
+                merged_raw = _merge_raw_news(existing_raw, fresh_raw, ticker)
+                if not merged_raw.empty:
+                    save_to_s3(merged_raw, RAW_NEWS_PREFIX, f"{ticker}.csv")
+            except Exception as exc:
+                failures.append({"ticker": ticker, "stage": "ingestion", "error": str(exc)})
+                print(f"[monthly] Ingestion failed for {ticker}: {exc}")
 
     if not args.skip_cleaning:
         for ticker in tickers:
@@ -173,25 +178,29 @@ def main() -> None:
                 print(f"Skipping cleaning for {ticker}: no keyword config found.")
                 continue
 
-            print(f"\n[monthly] Incremental cleaning merge for {ticker}")
-            raw_df = _read_s3_csv_or_empty(bucket, f"{RAW_NEWS_PREFIX}/{ticker}.csv")
-            if raw_df.empty:
-                print(f"Skipping cleaning for {ticker}: no raw news found.")
-                continue
+            try:
+                print(f"\n[monthly] Incremental cleaning merge for {ticker}")
+                raw_df = _read_s3_csv_or_empty(bucket, f"{RAW_NEWS_PREFIX}/{ticker}.csv")
+                if raw_df.empty:
+                    print(f"Skipping cleaning for {ticker}: no raw news found.")
+                    continue
 
-            raw_df["published_utc"] = pd.to_datetime(raw_df["published_utc"], utc=True, errors="coerce")
-            cutoff = pd.Timestamp(incremental_start, tz="UTC")
-            incremental_raw = raw_df[raw_df["published_utc"] >= cutoff].copy()
-            if incremental_raw.empty:
-                print(f"No incremental raw news to clean for {ticker}.")
-                continue
+                raw_df["published_utc"] = pd.to_datetime(raw_df["published_utc"], utc=True, errors="coerce")
+                cutoff = pd.Timestamp(incremental_start, tz="UTC")
+                incremental_raw = raw_df[raw_df["published_utc"] >= cutoff].copy()
+                if incremental_raw.empty:
+                    print(f"No incremental raw news to clean for {ticker}.")
+                    continue
 
-            incremental_raw["published_utc"] = incremental_raw["published_utc"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")
-            fresh_clean = clean_news_dataframe(incremental_raw, keywords)
-            existing_clean = _read_s3_csv_or_empty(bucket, f"{CLEAN_NEWS_PREFIX}/{ticker}.csv")
-            merged_clean = _merge_clean_news(existing_clean, fresh_clean)
-            if not merged_clean.empty:
-                save_cleaned_to_s3(merged_clean, ticker)
+                incremental_raw["published_utc"] = incremental_raw["published_utc"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+                fresh_clean = clean_news_dataframe(incremental_raw, keywords)
+                existing_clean = _read_s3_csv_or_empty(bucket, f"{CLEAN_NEWS_PREFIX}/{ticker}.csv")
+                merged_clean = _merge_clean_news(existing_clean, fresh_clean)
+                if not merged_clean.empty:
+                    save_cleaned_to_s3(merged_clean, ticker)
+            except Exception as exc:
+                failures.append({"ticker": ticker, "stage": "cleaning", "error": str(exc)})
+                print(f"[monthly] Cleaning failed for {ticker}: {exc}")
 
     if not args.skip_event_pipeline:
         llm_api_key = _require_env("LLM_API_KEY")
@@ -199,32 +208,40 @@ def main() -> None:
         llm_base_url = os.environ.get("LLM_BASE_URL")
 
         for ticker in tickers:
-            print(f"\n[monthly] Event pipeline for {ticker}")
-            run_pipeline_for_ticker(
-                ticker=ticker,
-                bucket=bucket,
-                stock_prefix=os.environ.get("PIPELINE_STOCK_PREFIX", "raw/stock_prices"),
-                market_prefix=os.environ.get("PIPELINE_MARKET_PREFIX", "raw/stock_prices"),
-                news_prefix=os.environ.get("PIPELINE_NEWS_PREFIX", "clean/stock_news_cleaned"),
-                events_prefix=os.environ.get("PIPELINE_EVENTS_PREFIX", "events/raw"),
-                filtered_prefix=os.environ.get("PIPELINE_FILTERED_PREFIX", "events/filtered"),
-                benchmark_ticker=args.benchmark_ticker,
-                start_date=start_date,
-                end_date=end_date,
-                news_window_days=int(os.environ.get("PIPELINE_NEWS_WINDOW_DAYS", "2")),
-                pen=int(os.environ.get("PIPELINE_PEN", "4")),
-                window_left=int(os.environ.get("PIPELINE_WINDOW_LEFT", "3")),
-                window_right=int(os.environ.get("PIPELINE_WINDOW_RIGHT", "3")),
-                top_k_events=int(os.environ.get("PIPELINE_TOP_K_EVENTS", "25")),
-                llm_model=llm_model,
-                llm_base_url=llm_base_url,
-                llm_api_key=llm_api_key,
-                llm_batch_size=int(os.environ.get("PIPELINE_LLM_BATCH_SIZE", "30")),
-                llm_max_tokens=int(os.environ.get("PIPELINE_LLM_MAX_TOKENS", "256")),
-                llm_temperature=float(os.environ.get("PIPELINE_LLM_TEMPERATURE", "0.0")),
-            )
+            try:
+                print(f"\n[monthly] Event pipeline for {ticker}")
+                run_pipeline_for_ticker(
+                    ticker=ticker,
+                    bucket=bucket,
+                    stock_prefix=os.environ.get("PIPELINE_STOCK_PREFIX", "raw/stock_prices"),
+                    market_prefix=os.environ.get("PIPELINE_MARKET_PREFIX", "raw/stock_prices"),
+                    news_prefix=os.environ.get("PIPELINE_NEWS_PREFIX", "clean/stock_news_cleaned"),
+                    events_prefix=os.environ.get("PIPELINE_EVENTS_PREFIX", "events/raw"),
+                    filtered_prefix=os.environ.get("PIPELINE_FILTERED_PREFIX", "events/filtered"),
+                    benchmark_ticker=args.benchmark_ticker,
+                    start_date=start_date,
+                    end_date=end_date,
+                    news_window_days=int(os.environ.get("PIPELINE_NEWS_WINDOW_DAYS", "2")),
+                    pen=int(os.environ.get("PIPELINE_PEN", "4")),
+                    window_left=int(os.environ.get("PIPELINE_WINDOW_LEFT", "3")),
+                    window_right=int(os.environ.get("PIPELINE_WINDOW_RIGHT", "3")),
+                    top_k_events=int(os.environ.get("PIPELINE_TOP_K_EVENTS", "25")),
+                    llm_model=llm_model,
+                    llm_base_url=llm_base_url,
+                    llm_api_key=llm_api_key,
+                    llm_batch_size=int(os.environ.get("PIPELINE_LLM_BATCH_SIZE", "30")),
+                    llm_max_tokens=int(os.environ.get("PIPELINE_LLM_MAX_TOKENS", "256")),
+                    llm_temperature=float(os.environ.get("PIPELINE_LLM_TEMPERATURE", "0.0")),
+                )
+            except Exception as exc:
+                failures.append({"ticker": ticker, "stage": "event_pipeline", "error": str(exc)})
+                print(f"[monthly] Event pipeline failed for {ticker}: {exc}")
 
     print(f"\nMonthly event pipeline complete for {len(tickers)} ticker(s).")
+    if failures:
+        print(f"Monthly pipeline completed with {len(failures)} failure(s):")
+        for failure in failures:
+            print(f"- {failure['ticker']} [{failure['stage']}]: {failure['error']}")
 
 
 if __name__ == "__main__":
