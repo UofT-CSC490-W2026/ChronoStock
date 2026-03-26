@@ -283,6 +283,8 @@ class EventDetector:
                 results.append(result)
 
         results_df = pd.DataFrame(results)
+        if results_df.empty:
+            return pd.DataFrame(columns=list(events_df.columns) + list(self.news_df.columns))
         return results_df
 
     # -----------------------------
@@ -310,8 +312,10 @@ class EventDetector:
 
         results_df = self.attach_news(events_df)
 
-        events_df.sort_values("event_date", inplace=True)
-        results_df.sort_values("event_date", inplace=True)
+        if not events_df.empty and "event_date" in events_df.columns:
+            events_df.sort_values("event_date", inplace=True)
+        if not results_df.empty and "event_date" in results_df.columns:
+            results_df.sort_values("event_date", inplace=True)
         output_path = os.path.join(self.results_dir, f"{self.ticker}.csv")
         results_df.to_csv(output_path, index=False)
 
