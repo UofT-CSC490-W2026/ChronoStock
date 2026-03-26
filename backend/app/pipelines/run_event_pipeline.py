@@ -36,7 +36,7 @@ def _parse_sentiment(row: dict[str, str]) -> tuple[str, str | None]:
                     reasoning = entry.get("sentiment_reasoning") or None
                     if sentiment in ("positive", "negative", "neutral"):
                         return sentiment, reasoning
-        except (json.JSONDecodeError, TypeError):
+        except (json.JSONDecodeError, TypeError, AttributeError):
             pass
 
     try:

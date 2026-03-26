@@ -130,6 +130,8 @@ def clean_news_dataframe(df, ticker_keywords):
 
     df_deduped = df_relevant[keep_mask].copy()
     print(f"Rows remaining after deduplication: {len(df_deduped)}")
+    if df_deduped.empty:
+        return df_deduped
 
     print("Removing opinion and analysis pieces...")
     noise_patterns = [
