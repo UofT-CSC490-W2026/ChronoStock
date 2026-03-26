@@ -257,7 +257,7 @@ def get_stock_reddit(query, start_date, end_date, tickername, verbose=True, subr
 
 
 if __name__ == "__main__":
-    TICKERS = ["AMZN", "AAPL", "GOOGL", "MSFT", "TSLA"]
+    TICKERS = ["AMZN", "AAPL", "GOOGL", "MSFT", "TSLA", "NVDA"]
     START = "2020-02-16"
     END = "2026-03-26"
     API_KEY = os.environ.get("POLYGON_API_KEY", "")
