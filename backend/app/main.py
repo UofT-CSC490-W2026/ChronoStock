@@ -109,6 +109,7 @@ def get_stock(
 
     STOCK_CACHE_TTL_HOURS = 24
 
+
     # One cache file per ticker — stores full history + timestamp
     cached = cache.get(f"stock:{ticker}")
     cache_fresh = False
