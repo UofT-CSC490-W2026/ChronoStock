@@ -13,6 +13,9 @@ import yfinance as yf
 RAW_STOCK_PREFIX = os.environ.get("PIPELINE_RAW_STOCK_PREFIX", "raw/stock_prices")
 RAW_NEWS_PREFIX = os.environ.get("PIPELINE_RAW_NEWS_PREFIX", "raw/stock_news")
 RAW_REDDIT_PREFIX = os.environ.get("PIPELINE_RAW_REDDIT_PREFIX", "raw/stock_reddit")
+POLYGON_TIMEOUT_SECONDS = int(os.environ.get("POLYGON_TIMEOUT_SECONDS", "60"))
+POLYGON_MAX_RETRIES = int(os.environ.get("POLYGON_MAX_RETRIES", "3"))
+POLYGON_RETRY_SLEEP_SECONDS = int(os.environ.get("POLYGON_RETRY_SLEEP_SECONDS", "15"))
 DEFAULT_TICKERS = [
     "AMZN",
     "TSLA",
@@ -134,50 +137,68 @@ def get_stocknews(
     session = requests.Session()
 
     while next_url:
-        try:
-            if next_url == base_url:
-                response = session.get(next_url, params=params, timeout=15)
-            else:
-                if "apiKey=" not in next_url:
-                    sep = "&" if "?" in next_url else "?"
-                    next_url += f"{sep}apiKey={api_key}"
-                response = session.get(next_url, timeout=15)
+        success = False
+        for attempt in range(1, POLYGON_MAX_RETRIES + 1):
+            try:
+                if next_url == base_url:
+                    response = session.get(next_url, params=params, timeout=POLYGON_TIMEOUT_SECONDS)
+                else:
+                    if "apiKey=" not in next_url:
+                        sep = "&" if "?" in next_url else "?"
+                        next_url += f"{sep}apiKey={api_key}"
+                    response = session.get(next_url, timeout=POLYGON_TIMEOUT_SECONDS)
 
-            if response.status_code == 429:
-                print("Rate limit hit. Sleeping 60s...")
-                time.sleep(60)
-                continue
+                if response.status_code == 429:
+                    print("Rate limit hit. Sleeping 60s...")
+                    time.sleep(60)
+                    continue
 
-            response.raise_for_status()
-            data = response.json()
-            results = data.get("results", [])
-            if not results:
+                response.raise_for_status()
+                data = response.json()
+                results = data.get("results", [])
+                if not results:
+                    next_url = None
+                    success = True
+                    break
+
+                for article in results:
+                    all_records.append(
+                        {
+                            "id": article.get("id"),
+                            "tickers": "|".join(article.get("tickers", []) or []),
+                            "title": article.get("title"),
+                            "published_utc": article.get("published_utc"),
+                            "author": article.get("author"),
+                            "description": article.get("description"),
+                            "keywords": "|".join(article.get("keywords", []) or []),
+                            "insights": json.dumps(article.get("insights", [])),
+                            "url": article.get("article_url"),
+                        }
+                    )
+
+                print(f"Collected {len(results)} articles. Total: {len(all_records)}")
+                next_url = data.get("next_url")
+
+                if next_url:
+                    print("Sleeping 13s to respect free tier limit...")
+                    time.sleep(13)
+
+                success = True
+                break
+            except requests.exceptions.Timeout as e:
+                print(
+                    f"Timeout fetching news for {ticker} "
+                    f"(attempt {attempt}/{POLYGON_MAX_RETRIES}). Sleeping {POLYGON_RETRY_SLEEP_SECONDS}s..."
+                )
+                if attempt == POLYGON_MAX_RETRIES:
+                    print(f"Error: {e}")
+                time.sleep(POLYGON_RETRY_SLEEP_SECONDS)
+            except requests.exceptions.RequestException as e:
+                print(f"Error: {e}")
                 break
 
-            for article in results:
-                all_records.append(
-                    {
-                        "id": article.get("id"),
-                        "tickers": "|".join(article.get("tickers", []) or []),
-                        "title": article.get("title"),
-                        "published_utc": article.get("published_utc"),
-                        "author": article.get("author"),
-                        "description": article.get("description"),
-                        "keywords": "|".join(article.get("keywords", []) or []),
-                        "insights": json.dumps(article.get("insights", [])),
-                        "url": article.get("article_url"),
-                    }
-                )
-
-            print(f"Collected {len(results)} articles. Total: {len(all_records)}")
-            next_url = data.get("next_url")
-
-            if next_url:
-                print("Sleeping 13s to respect free tier limit...")
-                time.sleep(13)
-
-        except Exception as e:
-            print(f"Error: {e}")
+        if not success:
+            print(f"Stopping news extraction early for {ticker} after repeated failures.")
             break
 
     df = pd.DataFrame(all_records)
