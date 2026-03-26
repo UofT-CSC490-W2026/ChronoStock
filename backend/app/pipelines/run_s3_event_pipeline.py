@@ -12,6 +12,13 @@ import boto3
 
 from ..database import PH, cursor, get_conn, init_db
 
+# Test-depth coverage map (see backend/tests/test_run_s3_event_pipeline.py):
+# - Env validation: _require_env current-value override, env fallback, and missing-value failure.
+# - Data normalization: _build_s3_key, _source_from_url, _parse_sentiment JSON parsing + CAR fallback.
+# - CSV resilience: _load_filtered_csv required-field filtering, default IDs, summary truncation.
+# - Persistence behavior: _replace_ticker_events overwrite semantics and
+#   _write_filtered_results_to_db success/failure transaction paths.
+
 
 def _require_env(name: str, current: str | None) -> str:
     value = current or os.environ.get(name, "")
@@ -306,15 +313,15 @@ def run_pipeline_for_ticker(
     filtered_output_key = _build_s3_key(filtered_prefix, f"{ticker}_event_news_llm_filtered.csv")
 
     try:
-        from ..event_detection import EventDetector
+        from .core.event_detection import EventDetector
     except ModuleNotFoundError as exc:
         raise SystemExit(
             "Event pipeline dependency is missing. "
-            "backend/app/event_detection.py imports CARCalculator from car.py, "
+            "backend/app/pipelines/core/event_detection.py imports CARCalculator from car.py, "
             "but that module is not present in this repo."
         ) from exc
 
-    from ..llm import ChatCompletionsLLM, NewsLLMFilter, load_events
+    from .core.llm import ChatCompletionsLLM, NewsLLMFilter, load_events
 
     llm_api_key = _require_env("LLM_API_KEY", llm_api_key)
     llm_model = _require_env("LLM_MODEL", llm_model)

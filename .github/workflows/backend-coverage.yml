@@ -1,0 +1,160 @@
+name: Backend Coverage
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-coverage.yml"
+      - "scripts/update-readme-backend-coverage.mjs"
+      - "README.md"
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-coverage.yml"
+      - "scripts/update-readme-backend-coverage.mjs"
+      - "README.md"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: Run backend test coverage
+        env:
+          JWT_SECRET_KEY: test-secret
+        run: |
+          mkdir -p coverage
+          pytest tests \
+            --cov=app \
+            --cov-branch \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage/coverage.xml \
+            --cov-report=json:coverage/coverage.json
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-report
+          path: backend/coverage
+
+      - name: Build coverage summary
+        id: summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const path = require("path");
+
+            const jsonPath = path.join(process.cwd(), "backend", "coverage", "coverage.json");
+            const report = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+            const total = report.totals;
+
+            const lines = Number(total.percent_covered).toFixed(2);
+            const statements = total.num_statements
+              ? ((Number(total.covered_lines) / Number(total.num_statements)) * 100).toFixed(2)
+              : lines;
+            const branches = total.num_branches
+              ? ((Number(total.covered_branches) / Number(total.num_branches)) * 100).toFixed(2)
+              : "N/A";
+            const functions = "N/A";
+
+            const body = [
+              "## Backend Coverage",
+              "",
+              "| Metric | Coverage |",
+              "| --- | ---: |",
+              `| Lines | ${lines}% |`,
+              `| Statements | ${statements}% |`,
+              `| Branches | ${branches === "N/A" ? "N/A" : `${branches}%`} |`,
+              `| Functions | ${functions} |`,
+            ].join("\n");
+
+            core.setOutput("lines", lines);
+            core.setOutput("statements", statements);
+            core.setOutput("branches", branches);
+            core.setOutput("functions", functions);
+            core.setOutput("body", body);
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        env:
+          COVERAGE_BODY: ${{ steps.summary.outputs.body }}
+        with:
+          script: |
+            const body = process.env.COVERAGE_BODY;
+            const issue_number = context.payload.pull_request.number;
+            const marker = "<!-- backend-coverage-comment -->";
+            const fullBody = `${marker}\n${body}`;
+
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+              }
+            );
+
+            const existing = comments.find((comment) =>
+              comment.user?.type === "Bot" && comment.body?.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: fullBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number,
+                body: fullBody,
+              });
+            }
+
+      - name: Update README backend coverage section
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: node ../scripts/update-readme-backend-coverage.mjs
+
+      - name: Commit README backend coverage update
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- ../README.md; then
+            git add ../README.md
+            git commit -m "chore: update backend coverage badge [skip ci]"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi

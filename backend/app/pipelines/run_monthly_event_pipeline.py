@@ -95,9 +95,12 @@ def _merge_raw_news(existing: pd.DataFrame, fresh: pd.DataFrame, ticker: str) ->
     else:
         merged["ticker"] = merged["ticker"].fillna(ticker)
 
-    if "published_utc" in merged.columns:
+    if "published_utc" in merged.columns and "id" in merged.columns:
         merged["published_utc"] = pd.to_datetime(merged["published_utc"], utc=True, errors="coerce")
         merged = merged.sort_values(["published_utc", "id"], ascending=[True, True], na_position="last")
+    elif "published_utc" in merged.columns:
+        merged["published_utc"] = pd.to_datetime(merged["published_utc"], utc=True, errors="coerce")
+        merged = merged.sort_values(["published_utc"], ascending=[True], na_position="last")
 
     if "id" in merged.columns:
         merged = merged.drop_duplicates(subset=["id"], keep="last")
@@ -120,9 +123,12 @@ def _merge_clean_news(existing: pd.DataFrame, fresh: pd.DataFrame) -> pd.DataFra
         return pd.DataFrame()
 
     merged = pd.concat(frames, ignore_index=True)
-    if "published_utc" in merged.columns:
+    if "published_utc" in merged.columns and "id" in merged.columns:
         merged["published_utc"] = pd.to_datetime(merged["published_utc"], utc=True, errors="coerce")
         merged = merged.sort_values(["published_utc", "id"], ascending=[True, True], na_position="last")
+    elif "published_utc" in merged.columns:
+        merged["published_utc"] = pd.to_datetime(merged["published_utc"], utc=True, errors="coerce")
+        merged = merged.sort_values(["published_utc"], ascending=[True], na_position="last")
 
     if "id" in merged.columns:
         merged = merged.drop_duplicates(subset=["id"], keep="last")

@@ -1,0 +1,3 @@
+ticker,event_date,title,description,url,car,abs_car,id,insights
+NVDA,2026-01-01,,desc,https://example.com/a,1.0,1.0,id-1,[]
+,2026-01-01,Event B,desc,https://example.com/b,1.0,1.0,id-2,[]
