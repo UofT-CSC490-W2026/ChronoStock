@@ -18,105 +18,10 @@ def test_local_get_missing_returns_none(tmp_path, monkeypatch) -> None:
     assert cache._local_get("missing:key") is None
 
 
-def test_redis_track_and_evict_removes_oldest(monkeypatch) -> None:
-    monkeypatch.setattr(cache, "REDIS_MAX_KEYS", 2)
-
-    class FakePipeline:
-        def __init__(self, client):
-            self.client = client
-            self.ops = []
-
-        def zadd(self, key, payload):
-            self.ops.append(("zadd", key, payload))
-            return self
-
-        def zcard(self, key):
-            self.ops.append(("zcard", key))
-            return self
-
-        def delete(self, *keys):
-            self.ops.append(("delete", keys))
-            return self
-
-        def zrem(self, key, *members):
-            self.ops.append(("zrem", key, members))
-            return self
-
-        def execute(self):
-            # First pipeline call returns (_, count).
-            if any(op[0] == "zcard" for op in self.ops):
-                return [None, self.client.cardinality]
-            self.client.deleted = list(self.ops)
-            return []
-
-    class FakeClient:
-        def __init__(self):
-            self.cardinality = 4
-            self.deleted = []
-
-        def pipeline(self):
-            return FakePipeline(self)
-
-        def zrange(self, key, start, end):
-            assert start == 0
-            assert end == 1
-            return ["k:1", "k:2"]
-
-    client = FakeClient()
-    cache._redis_track_and_evict(client, "k:new")
-
-    op_names = [op[0] for op in client.deleted]
-    assert "delete" in op_names
-    assert "zrem" in op_names
-
-
-def test_redis_get_miss_cleans_index_when_enabled(monkeypatch) -> None:
-    monkeypatch.setattr(cache, "REDIS_MAX_KEYS", 10)
-
-    class FakeClient:
-        def __init__(self):
-            self.removed = []
-
-        def get(self, _key):
-            return None
-
-        def zrem(self, index_key, redis_key):
-            self.removed.append((index_key, redis_key))
-
-    fake = FakeClient()
-    monkeypatch.setattr(cache, "_redis_client", lambda: fake)
-
-    assert cache._redis_get("abc") is None
-    assert len(fake.removed) == 1
-
-
-def test_redis_get_valid_json_updates_lru(monkeypatch) -> None:
-    monkeypatch.setattr(cache, "REDIS_MAX_KEYS", 10)
-
-    class FakeClient:
-        def __init__(self):
-            self.zadd_calls = []
-
-        def get(self, _key):
-            return json.dumps({"ok": True})
-
-        def zadd(self, index_key, payload):
-            self.zadd_calls.append((index_key, payload))
-
-    fake = FakeClient()
-    monkeypatch.setattr(cache, "_redis_client", lambda: fake)
-
-    assert cache._redis_get("abc") == {"ok": True}
-    assert len(fake.zadd_calls) == 1
-
-
 def test_redis_get_invalid_json_returns_none(monkeypatch) -> None:
     class FakeClient:
         def get(self, _key):
             return "{bad json"
-
-        def zadd(self, _index_key, _payload):
-            return None
 
     monkeypatch.setattr(cache, "_redis_client", lambda: FakeClient())
     assert cache._redis_get("abc") is None
@@ -238,15 +143,25 @@ def test_s3_get_reads_json_payload(monkeypatch) -> None:
 
 def test_redis_client_uses_from_url() -> None:
     calls = []
-    fake_redis = SimpleNamespace(
-        Redis=SimpleNamespace(
-            from_url=lambda url, decode_responses=True: calls.append((url, decode_responses)) or "redis-client"
-        )
-    )
+
+    class FakeConnectionPool:
+        @staticmethod
+        def from_url(url, decode_responses=True):
+            calls.append((url, decode_responses))
+            return "pool"
+
+    class FakeRedis:
+        def __init__(self, connection_pool=None):
+            self.connection_pool = connection_pool
+
+    fake_redis = SimpleNamespace(ConnectionPool=FakeConnectionPool, Redis=FakeRedis)
     original = sys.modules.get("redis")
     sys.modules["redis"] = fake_redis
     try:
-        assert cache._redis_client() == "redis-client"
+        # First call should create the pool via ConnectionPool.from_url(...)
+        client = cache._redis_client()
+        assert isinstance(client, FakeRedis)
+        assert client.connection_pool == "pool"
     finally:
         if original is None:
             del sys.modules["redis"]
@@ -256,65 +171,8 @@ def test_redis_client_uses_from_url() -> None:
     assert calls == [(cache.REDIS_URL, True)]
 
 
-def test_redis_track_and_evict_returns_early_when_disabled(monkeypatch) -> None:
-    monkeypatch.setattr(cache, "REDIS_MAX_KEYS", 0)
-
-    class FakeClient:
-        def pipeline(self):
-            raise AssertionError("should not call pipeline")
-
-    cache._redis_track_and_evict(FakeClient(), "redis:key")
-
-
-def test_redis_track_and_evict_returns_when_not_over_limit(monkeypatch) -> None:
-    monkeypatch.setattr(cache, "REDIS_MAX_KEYS", 3)
-
-    class FakePipeline:
-        def zadd(self, key, payload):
-            return self
-
-        def zcard(self, key):
-            return self
-
-        def execute(self):
-            return [None, 3]
-
-    class FakeClient:
-        def pipeline(self):
-            return FakePipeline()
-
-        def zrange(self, *args):
-            raise AssertionError("should not fetch oldest keys")
-
-    cache._redis_track_and_evict(FakeClient(), "redis:key")
-
-
-def test_redis_track_and_evict_returns_when_oldest_is_empty(monkeypatch) -> None:
-    monkeypatch.setattr(cache, "REDIS_MAX_KEYS", 1)
-
-    class FakePipeline:
-        def zadd(self, key, payload):
-            return self
-
-        def zcard(self, key):
-            return self
-
-        def execute(self):
-            return [None, 2]
-
-    class FakeClient:
-        def pipeline(self):
-            return FakePipeline()
-
-        def zrange(self, key, start, end):
-            return []
-
-    cache._redis_track_and_evict(FakeClient(), "redis:key")
-
-
 def test_redis_set_without_ttl_and_error_paths(monkeypatch) -> None:
     monkeypatch.setattr(cache, "REDIS_CACHE_TTL_SECONDS", 0)
-    track_calls = []
 
     class FakeRedisError(Exception):
         pass
@@ -331,11 +189,9 @@ def test_redis_set_without_ttl_and_error_paths(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "redis", SimpleNamespace(exceptions=redis_exceptions))
     monkeypatch.setitem(sys.modules, "redis.exceptions", redis_exceptions)
     monkeypatch.setattr(cache, "_redis_client", lambda: client)
-    monkeypatch.setattr(cache, "_redis_track_and_evict", lambda c, key: track_calls.append((c, key)))
 
     cache._redis_set("abc", {"ok": True})
-    assert client.calls == [(cache._redis_key("abc"), {"ok": True}, None)]
-    assert track_calls == [(client, cache._redis_key("abc"))]
+    assert client.calls == [(cache.REDIS_PREFIX + "abc", {"ok": True}, None)]
 
     class BadClient:
         def set(self, key, payload, ex=None):
@@ -345,9 +201,7 @@ def test_redis_set_without_ttl_and_error_paths(monkeypatch) -> None:
     cache._redis_set("abc", {"ok": True})
 
 
-def test_redis_get_paths_when_index_tracking_disabled(monkeypatch) -> None:
-    monkeypatch.setattr(cache, "REDIS_MAX_KEYS", 0)
-
+def test_redis_get_miss_returns_none(monkeypatch) -> None:
     class MissingClient:
         def get(self, _key):
             return None
@@ -355,6 +209,8 @@ def test_redis_get_paths_when_index_tracking_disabled(monkeypatch) -> None:
     monkeypatch.setattr(cache, "_redis_client", lambda: MissingClient())
     assert cache._redis_get("abc") is None
 
+
+def test_redis_get_hit_returns_dict(monkeypatch) -> None:
     class HitClient:
         def get(self, _key):
             return json.dumps({"ok": True})
@@ -381,7 +237,6 @@ def test_redis_get_returns_none_on_redis_error(monkeypatch) -> None:
 
 def test_redis_set_uses_ttl_when_configured(monkeypatch) -> None:
     monkeypatch.setattr(cache, "REDIS_CACHE_TTL_SECONDS", 30)
-    track_calls = []
 
     class FakeRedisError(Exception):
         pass
@@ -398,9 +253,7 @@ def test_redis_set_uses_ttl_when_configured(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "redis", SimpleNamespace(exceptions=redis_exceptions))
     monkeypatch.setitem(sys.modules, "redis.exceptions", redis_exceptions)
     monkeypatch.setattr(cache, "_redis_client", lambda: client)
-    monkeypatch.setattr(cache, "_redis_track_and_evict", lambda c, key: track_calls.append((c, key)))
 
     cache._redis_set("abc", {"ok": True})
 
-    assert client.calls == [(cache._redis_key("abc"), {"ok": True}, 30)]
-    assert track_calls == [(client, cache._redis_key("abc"))]
+    assert client.calls == [(cache.REDIS_PREFIX + "abc", {"ok": True}, 30)]
