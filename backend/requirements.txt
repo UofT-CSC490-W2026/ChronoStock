@@ -16,3 +16,4 @@ psycopg2-binary==2.9.10
 slowapi==0.1.9
 yahooquery
 redis
+pytest-benchmark
