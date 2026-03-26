@@ -76,8 +76,19 @@ class EventDetector:
     # Load data
     # -----------------------------
     def load_data(self):
-        stock = pd.read_csv(self.stock_path, parse_dates=["Date"])
-        market = pd.read_csv(self.market_path, parse_dates=["Date"])
+        try:
+            stock = pd.read_csv(self.stock_path, parse_dates=["Date"])
+        except pd.errors.EmptyDataError:
+            self.price_df = pd.DataFrame()
+            self.news_df = pd.DataFrame(columns=["published_utc"])
+            return
+
+        try:
+            market = pd.read_csv(self.market_path, parse_dates=["Date"])
+        except pd.errors.EmptyDataError:
+            self.price_df = pd.DataFrame()
+            self.news_df = pd.DataFrame(columns=["published_utc"])
+            return
 
         stock = stock[["Date", "Close"]].rename(columns={"Close": "stock_price"})
         market = market[["Date", "Close"]].rename(columns={"Close": "market_price"})
@@ -102,7 +113,11 @@ class EventDetector:
         self.price_df = df
 
         # Load news
-        self.news_df = pd.read_csv(self.news_path)
+        try:
+            self.news_df = pd.read_csv(self.news_path)
+        except pd.errors.EmptyDataError:
+            self.news_df = pd.DataFrame(columns=["published_utc"])
+            return
 
         self.news_df["published_utc"] = pd.to_datetime(
             self.news_df["published_utc"],
