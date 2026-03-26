@@ -10,7 +10,7 @@ from pathlib import Path
 
 import boto3
 
-from .database import PH, cursor, get_conn, init_db
+from ..database import PH, cursor, get_conn, init_db
 
 
 def _require_env(name: str, current: str | None) -> str:
@@ -285,7 +285,7 @@ def main() -> None:
     filtered_output_key = _build_s3_key(args.filtered_prefix, f"{ticker}_event_news_llm_filtered.csv")
 
     try:
-        from .event_detection import EventDetector
+        from ..event_detection import EventDetector
     except ModuleNotFoundError as exc:
         raise SystemExit(
             "Event pipeline dependency is missing. "
@@ -293,7 +293,7 @@ def main() -> None:
             "but that module is not present in this repo."
         ) from exc
 
-    from .llm import ChatCompletionsLLM, NewsLLMFilter, load_events
+    from ..llm import ChatCompletionsLLM, NewsLLMFilter, load_events
 
     llm_api_key = _require_env("LLM_API_KEY", args.llm_api_key)
     llm_model = _require_env("LLM_MODEL", args.llm_model)

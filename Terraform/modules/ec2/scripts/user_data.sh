@@ -113,7 +113,7 @@ set -e
   --env-file /home/ec2-user/backend.env \
   -e DAILY_UPDATE_TICKERS="AAPL,MSFT,NVDA,TSLA" \
   zihan123/chronostock-backend:latest \
-  python -m app.run_daily_update
+  python -m app.pipelines.run_daily_update
 EOF
 chmod +x /home/ec2-user/run_daily_update.sh
 chown ec2-user:ec2-user /home/ec2-user/run_daily_update.sh
@@ -126,7 +126,7 @@ set -e
   --env-file /home/ec2-user/backend.env \
   -e DAILY_UPDATE_TICKERS="AAPL,MSFT,NVDA,TSLA" \
   zihan123/chronostock-backend:latest \
-  python -m app.run_hourly_update
+  python -m app.pipelines.run_hourly_update
 EOF
 chmod +x /home/ec2-user/run_hourly_update.sh
 chown ec2-user:ec2-user /home/ec2-user/run_hourly_update.sh
