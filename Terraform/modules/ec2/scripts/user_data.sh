@@ -152,7 +152,6 @@ set -e
 /usr/bin/docker pull zihan123/chronostock-backend:latest
 /usr/bin/docker run --rm \
   --env-file /home/ec2-user/backend.env \
-  -e PIPELINE_START_DATE="2016-02-16" \
   -e PIPELINE_END_DATE="$(date -u +%F)" \
   zihan123/chronostock-backend:latest \
   python -m app.pipelines.run_monthly_event_pipeline --tickers "${monthly_event_tickers}"

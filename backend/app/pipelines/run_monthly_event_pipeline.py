@@ -26,7 +26,7 @@ from .run_s3_event_pipeline import run_pipeline_for_ticker
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the monthly S3-backed event pipeline for a set of tickers.")
     parser.add_argument("--tickers", default=",".join(INGESTION_DEFAULT_TICKERS))
-    parser.add_argument("--start-date", default=os.environ.get("PIPELINE_START_DATE", "2016-02-16"))
+    parser.add_argument("--start-date", default=os.environ.get("PIPELINE_START_DATE"))
     parser.add_argument("--end-date", default=os.environ.get("PIPELINE_END_DATE"))
     parser.add_argument("--benchmark-ticker", default=os.environ.get("PIPELINE_BENCHMARK_TICKER", "^DJI"))
     parser.add_argument(
@@ -72,6 +72,12 @@ def _date_range_for_incremental(end_date: str, incremental_days: int) -> tuple[s
     end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     start_dt = end_dt - timedelta(days=max(1, incremental_days))
     return start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d")
+
+
+def _rolling_five_year_start(end_date: str) -> str:
+    end_dt = datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    start_dt = end_dt - timedelta(days=365 * 5)
+    return start_dt.strftime("%Y-%m-%d")
 
 
 def _merge_raw_news(existing: pd.DataFrame, fresh: pd.DataFrame, ticker: str) -> pd.DataFrame:
@@ -135,15 +141,16 @@ def main() -> None:
     bucket = _require_env("PIPELINE_S3_BUCKET")
     polygon_api_key = _require_env("POLYGON_API_KEY")
     end_date = args.end_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    start_date = args.start_date or _rolling_five_year_start(end_date)
     incremental_start, incremental_end = _date_range_for_incremental(end_date, args.incremental_days)
 
     if not args.skip_ingestion:
         print(f"Refreshing benchmark {args.benchmark_ticker} price history...")
-        get_stockprice(args.benchmark_ticker, args.start_date, end_date, save_db=False, save_local=True)
+        get_stockprice(args.benchmark_ticker, start_date, end_date, save_db=False, save_local=True)
 
         for ticker in tickers:
             print(f"\n[monthly] Price refresh for {ticker}")
-            get_stockprice(ticker, args.start_date, end_date, save_db=False, save_local=True)
+            get_stockprice(ticker, start_date, end_date, save_db=False, save_local=True)
 
             print(f"\n[monthly] Incremental news ingestion for {ticker}: {incremental_start} -> {incremental_end}")
             existing_raw = _read_s3_csv_or_empty(bucket, f"{RAW_NEWS_PREFIX}/{ticker}.csv")
@@ -202,7 +209,7 @@ def main() -> None:
                 events_prefix=os.environ.get("PIPELINE_EVENTS_PREFIX", "events/raw"),
                 filtered_prefix=os.environ.get("PIPELINE_FILTERED_PREFIX", "events/filtered"),
                 benchmark_ticker=args.benchmark_ticker,
-                start_date=args.start_date,
+                start_date=start_date,
                 end_date=end_date,
                 news_window_days=int(os.environ.get("PIPELINE_NEWS_WINDOW_DAYS", "2")),
                 pen=int(os.environ.get("PIPELINE_PEN", "4")),
