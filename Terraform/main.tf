@@ -54,6 +54,7 @@ module "secrets" {
   db_host         = module.rds.db_host
   db_name         = var.db_name
   polygon_api_key = var.polygon_api_key
+  llm_api_key     = var.llm_api_key
   jwt_secret_key  = var.jwt_secret_key
 }
 
@@ -164,6 +165,10 @@ module "ec2" {
   log_group_name    = aws_cloudwatch_log_group.pipeline_logs.name
   secret_name       = var.secret_name
   frontend_url      = var.frontend_url
+  bucket_name       = var.bucket_name
+  llm_model         = var.llm_model
+  llm_base_url      = var.llm_base_url
+  monthly_event_tickers = var.monthly_event_tickers
   secret_policy_arn = aws_iam_policy.secrets_policy.arn
   s3_policy_arn     = aws_iam_policy.s3_limited_policy.arn
   tags = {
@@ -245,6 +250,31 @@ resource "aws_scheduler_schedule" "hourly_prices" {
       Parameters = {
         commands = [
           "/home/ec2-user/run_hourly_update.sh >> /home/ec2-user/hourly_update.log 2>&1"
+        ]
+      }
+    })
+  }
+}
+
+resource "aws_scheduler_schedule" "monthly_event_pipeline" {
+  name                         = "stock-pipeline-monthly-event"
+  schedule_expression          = "cron(0 2 1 * ? *)"
+  schedule_expression_timezone = "America/Toronto"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  target {
+    arn      = "arn:aws:scheduler:::aws-sdk:ssm:sendCommand"
+    role_arn = aws_iam_role.scheduler_role.arn
+
+    input = jsonencode({
+      DocumentName = "AWS-RunShellScript"
+      InstanceIds  = [module.ec2.instance_id]
+      Parameters = {
+        commands = [
+          "/home/ec2-user/run_monthly_event_pipeline.sh >> /home/ec2-user/monthly_event_pipeline.log 2>&1"
         ]
       }
     })

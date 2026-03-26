@@ -86,6 +86,26 @@ variable "frontend_url" {
   type        = string
 }
 
+variable "bucket_name" {
+  description = "Primary app data bucket used by backend pipelines"
+  type        = string
+}
+
+variable "llm_model" {
+  description = "LLM model configured for event pipelines"
+  type        = string
+}
+
+variable "llm_base_url" {
+  description = "Base URL configured for event pipelines"
+  type        = string
+}
+
+variable "monthly_event_tickers" {
+  description = "Comma-separated ticker list for the monthly event pipeline"
+  type        = string
+}
+
 variable "secret_policy_arn" {
   description = "IAM policy ARN allowing access to Secrets Manager"
   type        = string

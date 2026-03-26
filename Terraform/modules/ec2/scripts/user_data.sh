@@ -29,6 +29,8 @@ DB_HOST=$(echo "$SECRET_JSON" | jq -r '.host')
 DB_NAME=$(echo "$SECRET_JSON" | jq -r '.dbname')
 DB_PORT=$(echo "$SECRET_JSON" | jq -r '.port')
 JWT_SECRET=$(echo "$SECRET_JSON" | jq -r '.jwt_secret_key')
+POLYGON_API_KEY=$(echo "$SECRET_JSON" | jq -r '.polygon_api_key')
+LLM_API_KEY=$(echo "$SECRET_JSON" | jq -r '.llm_api_key')
 
 DATABASE_URL="postgresql://$DB_USER:$DB_PASS@$DB_HOST:$DB_PORT/$DB_NAME"
 
@@ -37,6 +39,12 @@ DB_BACKEND=postgres
 DATABASE_URL=$DATABASE_URL
 JWT_SECRET_KEY=$JWT_SECRET
 FRONTEND_URL=${frontend_url}
+PIPELINE_S3_BUCKET=${bucket_name}
+AWS_REGION=${aws_region}
+POLYGON_API_KEY=$POLYGON_API_KEY
+LLM_API_KEY=$LLM_API_KEY
+LLM_MODEL=${llm_model}
+LLM_BASE_URL=${llm_base_url}
 EOT
 
 chown ec2-user:ec2-user /home/ec2-user/backend.env
@@ -50,6 +58,8 @@ touch /home/ec2-user/daily_update.log
 chown ec2-user:ec2-user /home/ec2-user/daily_update.log
 touch /home/ec2-user/hourly_update.log
 chown ec2-user:ec2-user /home/ec2-user/hourly_update.log
+touch /home/ec2-user/monthly_event_pipeline.log
+chown ec2-user:ec2-user /home/ec2-user/monthly_event_pipeline.log
 
 ############################################
 # Configure CloudWatch Agent
@@ -74,6 +84,11 @@ cat <<EOT > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
             "file_path": "/home/ec2-user/hourly_update.log",
             "log_group_name": "${log_group_name}",
             "log_stream_name": "{instance_id}-hourly-update"
+          },
+          {
+            "file_path": "/home/ec2-user/monthly_event_pipeline.log",
+            "log_group_name": "${log_group_name}",
+            "log_stream_name": "{instance_id}-monthly-event-pipeline"
           }
         ]
       }
@@ -130,6 +145,20 @@ set -e
 EOF
 chmod +x /home/ec2-user/run_hourly_update.sh
 chown ec2-user:ec2-user /home/ec2-user/run_hourly_update.sh
+
+cat <<'EOF' > /home/ec2-user/run_monthly_event_pipeline.sh
+#!/bin/bash
+set -e
+/usr/bin/docker pull zihan123/chronostock-backend:latest
+/usr/bin/docker run --rm \
+  --env-file /home/ec2-user/backend.env \
+  -e PIPELINE_START_DATE="2016-02-16" \
+  -e PIPELINE_END_DATE="$(date -u +%F)" \
+  zihan123/chronostock-backend:latest \
+  python -m app.pipelines.run_monthly_event_pipeline --tickers "${monthly_event_tickers}"
+EOF
+chmod +x /home/ec2-user/run_monthly_event_pipeline.sh
+chown ec2-user:ec2-user /home/ec2-user/run_monthly_event_pipeline.sh
 
 ############################################
 # Initial backend deploy

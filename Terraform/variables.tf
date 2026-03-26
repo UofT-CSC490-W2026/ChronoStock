@@ -31,6 +31,30 @@ variable "polygon_api_key" {
   sensitive = true
 }
 
+variable "llm_api_key" {
+  description = "API key used by the monthly event LLM pipeline"
+  type        = string
+  sensitive   = true
+}
+
+variable "llm_model" {
+  description = "LLM model used by the monthly event pipeline"
+  type        = string
+  default     = "deepseek-chat"
+}
+
+variable "llm_base_url" {
+  description = "OpenAI-compatible base URL used by the monthly event pipeline"
+  type        = string
+  default     = "https://api.deepseek.com"
+}
+
+variable "monthly_event_tickers" {
+  description = "Comma-separated ticker list for the monthly event pipeline"
+  type        = string
+  default     = "AMZN,TSLA,GOOGL,META,AAPL,MSFT,NVDA"
+}
+
 variable "jwt_secret_key" {
   description = "JWT signing secret for backend auth"
   type        = string

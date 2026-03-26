@@ -12,6 +12,7 @@ resource "aws_secretsmanager_secret_version" "rds_secret_value" {
     port            = "5432"
     dbname          = var.db_name
     polygon_api_key = var.polygon_api_key
+    llm_api_key     = var.llm_api_key
     jwt_secret_key  = var.jwt_secret_key
   })
 }

@@ -89,6 +89,10 @@ resource "aws_instance" "app" {
     log_group_name = var.log_group_name
     secret_name    = var.secret_name
     frontend_url   = var.frontend_url
+    bucket_name    = var.bucket_name
+    llm_model      = var.llm_model
+    llm_base_url   = var.llm_base_url
+    monthly_event_tickers = var.monthly_event_tickers
   })
 
   tags = var.tags
