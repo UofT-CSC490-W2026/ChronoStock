@@ -272,17 +272,38 @@ def _write_filtered_results_to_db(filtered_csv_path: Path, ticker: str) -> int:
         conn.close()
 
 
-def main() -> None:
-    args = parse_args()
-    bucket = _require_env("PIPELINE_S3_BUCKET", args.bucket)
-    ticker = args.ticker.upper()
-    benchmark = args.benchmark_ticker
+def run_pipeline_for_ticker(
+    *,
+    ticker: str,
+    bucket: str,
+    stock_prefix: str = "raw/stock_prices",
+    market_prefix: str = "raw/stock_prices",
+    news_prefix: str = "clean/stock_news_cleaned",
+    events_prefix: str = "events/raw",
+    filtered_prefix: str = "events/filtered",
+    benchmark_ticker: str = "^DJI",
+    start_date: str | None = None,
+    end_date: str | None = None,
+    news_window_days: int = 2,
+    pen: int = 4,
+    window_left: int = 3,
+    window_right: int = 3,
+    top_k_events: int = 25,
+    llm_model: str | None = None,
+    llm_base_url: str | None = None,
+    llm_api_key: str | None = None,
+    llm_batch_size: int = 30,
+    llm_max_tokens: int = 256,
+    llm_temperature: float = 0.0,
+) -> int:
+    ticker = ticker.upper()
+    benchmark = benchmark_ticker
 
-    stock_key = _build_s3_key(args.stock_prefix, f"{ticker}.csv")
-    market_key = _build_s3_key(args.market_prefix, f"{benchmark}.csv")
-    news_key = _build_s3_key(args.news_prefix, f"{ticker}.csv")
-    raw_output_key = _build_s3_key(args.events_prefix, f"{ticker}.csv")
-    filtered_output_key = _build_s3_key(args.filtered_prefix, f"{ticker}_event_news_llm_filtered.csv")
+    stock_key = _build_s3_key(stock_prefix, f"{ticker}.csv")
+    market_key = _build_s3_key(market_prefix, f"{benchmark}.csv")
+    news_key = _build_s3_key(news_prefix, f"{ticker}.csv")
+    raw_output_key = _build_s3_key(events_prefix, f"{ticker}.csv")
+    filtered_output_key = _build_s3_key(filtered_prefix, f"{ticker}_event_news_llm_filtered.csv")
 
     try:
         from ..event_detection import EventDetector
@@ -295,8 +316,8 @@ def main() -> None:
 
     from ..llm import ChatCompletionsLLM, NewsLLMFilter, load_events
 
-    llm_api_key = _require_env("LLM_API_KEY", args.llm_api_key)
-    llm_model = _require_env("LLM_MODEL", args.llm_model)
+    llm_api_key = _require_env("LLM_API_KEY", llm_api_key)
+    llm_model = _require_env("LLM_MODEL", llm_model)
 
     temp_root = Path(tempfile.mkdtemp(prefix=f"event-pipeline-{ticker.lower()}-"))
     try:
@@ -319,13 +340,13 @@ def main() -> None:
             market_path=str(market_path),
             news_path=str(news_path),
             results_dir=str(results_dir),
-            start_time=args.start_date,
-            end_time=args.end_date,
-            news_window_days=args.news_window_days,
-            pen=args.pen,
-            window_left=args.window_left,
-            window_right=args.window_right,
-            top_k_events=args.top_k_events,
+            start_time=start_date,
+            end_time=end_date,
+            news_window_days=news_window_days,
+            pen=pen,
+            window_left=window_left,
+            window_right=window_right,
+            top_k_events=top_k_events,
         )
 
         _, raw_results_df = detector.run()
@@ -336,17 +357,17 @@ def main() -> None:
         llm = ChatCompletionsLLM(
             api_key=llm_api_key,
             model=llm_model,
-            base_url=args.llm_base_url,
-            max_tokens=args.llm_max_tokens,
-            temperature=args.llm_temperature,
+            base_url=llm_base_url,
+            max_tokens=llm_max_tokens,
+            temperature=llm_temperature,
         )
-        filter_pipeline = NewsLLMFilter(llm, batch_size=args.llm_batch_size)
+        filter_pipeline = NewsLLMFilter(llm, batch_size=llm_batch_size)
 
         events_df = load_events(str(raw_output_path))
         selected_ids = filter_pipeline.run(
             events_df,
-            start_date=args.start_date,
-            end_date=args.end_date,
+            start_date=start_date,
+            end_date=end_date,
         )
         filtered_df = events_df[events_df["id"].isin(selected_ids)].copy()
         filtered_df.sort_values("event_date", inplace=True)
@@ -365,8 +386,37 @@ def main() -> None:
         print(f"Raw matched rows: {len(raw_results_df)}")
         print(f"Filtered rows: {len(filtered_df)}")
         print(f"Rows written to database: {inserted}")
+        return inserted
     finally:
         shutil.rmtree(temp_root, ignore_errors=True)
+
+
+def main() -> None:
+    args = parse_args()
+    bucket = _require_env("PIPELINE_S3_BUCKET", args.bucket)
+    run_pipeline_for_ticker(
+        ticker=args.ticker,
+        bucket=bucket,
+        stock_prefix=args.stock_prefix,
+        market_prefix=args.market_prefix,
+        news_prefix=args.news_prefix,
+        events_prefix=args.events_prefix,
+        filtered_prefix=args.filtered_prefix,
+        benchmark_ticker=args.benchmark_ticker,
+        start_date=args.start_date,
+        end_date=args.end_date,
+        news_window_days=args.news_window_days,
+        pen=args.pen,
+        window_left=args.window_left,
+        window_right=args.window_right,
+        top_k_events=args.top_k_events,
+        llm_model=args.llm_model,
+        llm_base_url=args.llm_base_url,
+        llm_api_key=args.llm_api_key,
+        llm_batch_size=args.llm_batch_size,
+        llm_max_tokens=args.llm_max_tokens,
+        llm_temperature=args.llm_temperature,
+    )
 
 
 if __name__ == "__main__":
