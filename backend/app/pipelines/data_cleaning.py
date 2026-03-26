@@ -95,31 +95,11 @@ def save_cleaned_to_local_csv(df, ticker, output_dir="data/stock_news_cleaned"):
     print(f"Saved {len(df)} cleaned rows locally to {csv_path}")
 
 
-def clean_stock_news(
-    ticker,
-    ticker_keywords,
-    source="s3",
-    output="s3",
-    input_csv_dir="data/stock_news",
-    output_csv_dir="data/stock_news_cleaned",
-):
-    """
-    Cleans stock news data by:
-    1. Filtering for relevance based on keywords.
-    2. Deduplicating entries based on time (24h) and title similarity.
-    3. Removing opinion/analysis pieces.
-    """
-    print(f"--- Cleaning News for {ticker} ---")
-    try:
-        df = load_stock_news(ticker, source=source, csv_dir=input_csv_dir)
-    except Exception as e:
-        print(f"Error loading news data: {e}")
-        return
-
+def clean_news_dataframe(df, ticker_keywords):
     if df.empty:
-        print(f"No news found for {ticker} in {source}.")
-        return
+        return df.copy()
 
+    df = df.copy()
     df["published_utc"] = pd.to_datetime(df["published_utc"], utc=True, errors="coerce")
     df = df.dropna(subset=["published_utc", "id"])
     df["description"] = df["description"].fillna("")
@@ -170,6 +150,35 @@ def clean_stock_news(
     df_final = df_deduped[~df_deduped["title"].str.contains(noise_regex, na=False)].copy()
     df_final["published_utc"] = df_final["published_utc"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     print(f"Final row count: {len(df_final)}")
+    return df_final
+
+
+def clean_stock_news(
+    ticker,
+    ticker_keywords,
+    source="s3",
+    output="s3",
+    input_csv_dir="data/stock_news",
+    output_csv_dir="data/stock_news_cleaned",
+):
+    """
+    Cleans stock news data by:
+    1. Filtering for relevance based on keywords.
+    2. Deduplicating entries based on time (24h) and title similarity.
+    3. Removing opinion/analysis pieces.
+    """
+    print(f"--- Cleaning News for {ticker} ---")
+    try:
+        df = load_stock_news(ticker, source=source, csv_dir=input_csv_dir)
+    except Exception as e:
+        print(f"Error loading news data: {e}")
+        return
+
+    if df.empty:
+        print(f"No news found for {ticker} in {source}.")
+        return
+
+    df_final = clean_news_dataframe(df, ticker_keywords)
 
     if output == "s3":
         save_cleaned_to_s3(df_final, ticker)
