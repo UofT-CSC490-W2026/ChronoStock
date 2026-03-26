@@ -26,9 +26,9 @@ _This section reports frontend Jest coverage and is updated automatically by Git
 
 | Metric | Coverage |
 | --- | ---: |
-| Lines | 4.22% |
-| Statements | 4.46% |
-| Branches | 3.38% |
+| Lines | 98.86% |
+| Statements | 100.00% |
+| Branches | 94.35% |
 
 _This section reports backend pytest-cov coverage and is updated automatically by GitHub Actions._
 <!-- backend-coverage:end -->
@@ -121,42 +121,76 @@ The app is now running at `http://localhost:3000`.
 ### 4. Try it out
 
 1. Open `http://localhost:3000`
-2. Browse trending stocks on the home page — no account needed
+2. Browse trending stocks on the home page - no account needed
 3. Click any ticker to see its price chart and fundamentals
 4. Click **Sign up** to create an account and unlock the watchlist
+
+## Deployment
+
+- Frontend app: https://chrono-stock2.vercel.app/
 
 ---
 
 ## Project Structure
 
-```
+```text
 ChronoStock/
-├── backend/
-│   ├── app/
-│   │   ├── main.py        # FastAPI routes
-│   │   ├── models.py      # Pydantic models
-│   │   ├── stock.py       # yfinance data fetching
-│   │   ├── auth.py        # JWT + bcrypt
-│   │   ├── database.py    # SQLite (users, watchlist)
-│   │   └── cache.py       # File-based cache (local or S3)
-│   ├── cache/             # Auto-created, gitignored
-│   ├── data/              # SQLite DB, auto-created, gitignored
-│   ├── requirements.txt
-│   └── .env.example
-└── frontend/
-    ├── app/               # Next.js App Router pages
-    ├── components/        # Chart, EventPanel, Navbar, etc.
-    ├── contexts/          # AuthContext
-    ├── lib/               # API client
-    ├── types/             # Shared TypeScript types
-    └── data/              # Mock data (used during development)
+|- .github/
+|  \- workflows/
+|- backend/
+|  |- app/
+|  |  |- analysis.py
+|  |  |- auth.py
+|  |  |- benchmark.py
+|  |  |- cache.py
+|  |  |- database.py
+|  |  |- demo_events.py
+|  |  |- edgar.py
+|  |  |- macro.py
+|  |  |- main.py
+|  |  |- models.py
+|  |  |- profiling.py
+|  |  |- stock.py
+|  |  \- pipelines/
+|  |     |- core/
+|  |     |  |- car.py
+|  |     |  |- event_detection.py
+|  |     |  \- llm.py
+|  |     |- data_cleaning.py
+|  |     |- data_ingestion.py
+|  |     |- run_daily_update.py
+|  |     |- run_event_pipeline.py
+|  |     |- run_hourly_update.py
+|  |     |- run_monthly_event_pipeline.py
+|  |     \- run_s3_event_pipeline.py
+|  |- cache/
+|  |- data/
+|  |- demodata/
+|  |- tests/
+|  |- Dockerfile
+|  |- pytest.ini
+|  \- requirements.txt
+|- frontend/
+|  |- __mocks__/
+|  |- __tests__/
+|  |- app/
+|  |- components/
+|  |- contexts/
+|  |- lib/
+|  |- public/
+|  |- types/
+|  |- jest.config.ts
+|  \- package.json
+|- scripts/
+|- Terraform/
+\- README.md
 ```
 
 ---
 
 ## Notes
 
-- **Stock data is cached on first load** — each ticker is stored as a JSON file under `backend/cache/`. Delete the file to force a fresh fetch.
-- **Trending stocks are cached for 24 hours** — stored in `backend/cache/trending.json`.
-- **The AI event layer is not yet connected** — the backend returns `events: []` for now. This is the next feature to build.
+- **Stock data is cached on first load** - each ticker is stored as a JSON file under `backend/cache/`. Delete the file to force a fresh fetch.
+- **Trending stocks are cached for 24 hours** - stored in `backend/cache/trending.json`.
+- **The AI event layer is not yet connected** - the backend returns `events: []` for now. This is the next feature to build.
 - **To use mock auth for local testing**, set `NEXT_PUBLIC_MOCK_AUTH=true` in the frontend environment. Leave it unset to use real backend auth.
