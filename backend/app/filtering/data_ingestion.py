@@ -16,21 +16,9 @@ RAW_REDDIT_PREFIX = os.environ.get("PIPELINE_RAW_REDDIT_PREFIX", "raw/stock_redd
 DEFAULT_TICKERS = [
     "AMZN",
     "TSLA",
-    "HD",
     "GOOGL",
     "META",
-    "NFLX",
     "JPM",
-    "BAC",
-    "BRK.B",
-    "UNH",
-    "JNJ",
-    "LLY",
-    "XOM",
-    "CVX",
-    "CAT",
-    "PG",
-    "KO",
     "NVDA",
 ]
 
