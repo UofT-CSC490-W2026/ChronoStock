@@ -86,6 +86,11 @@ variable "frontend_url" {
   type        = string
 }
 
+variable "certbot_email" {
+  description = "Email address used by certbot when provisioning HTTPS"
+  type        = string
+}
+
 variable "bucket_name" {
   description = "Primary app data bucket used by backend pipelines"
   type        = string

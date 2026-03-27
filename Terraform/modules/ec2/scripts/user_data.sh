@@ -45,6 +45,7 @@ POLYGON_API_KEY=$POLYGON_API_KEY
 LLM_API_KEY=$LLM_API_KEY
 LLM_MODEL=${llm_model}
 LLM_BASE_URL=${llm_base_url}
+MONTHLY_EVENT_TICKERS=${monthly_event_tickers}
 EOT
 
 chown ec2-user:ec2-user /home/ec2-user/backend.env
@@ -149,12 +150,15 @@ chown ec2-user:ec2-user /home/ec2-user/run_hourly_update.sh
 cat <<'EOF' > /home/ec2-user/run_monthly_event_pipeline.sh
 #!/bin/bash
 set -e
+set -a
+source /home/ec2-user/backend.env
+set +a
 /usr/bin/docker pull zihan123/chronostock-backend:latest
 /usr/bin/docker run --rm \
   --env-file /home/ec2-user/backend.env \
   -e PIPELINE_END_DATE="$(date -u +%F)" \
   zihan123/chronostock-backend:latest \
-  python -m app.pipelines.run_monthly_event_pipeline --tickers "AMZN,TSLA,GOOGL,META,AAPL,MSFT,NVDA"
+  python -m app.pipelines.run_monthly_event_pipeline --tickers "${MONTHLY_EVENT_TICKERS}"
 EOF
 chmod +x /home/ec2-user/run_monthly_event_pipeline.sh
 chown ec2-user:ec2-user /home/ec2-user/run_monthly_event_pipeline.sh
@@ -254,7 +258,7 @@ echo "Reloading nginx..."
 sudo systemctl reload nginx
 
 echo "Requesting HTTPS certificate..."
-sudo certbot --nginx -d ${DOMAIN} --non-interactive --agree-tos -m sibdbdxhhhd@gmail.com --redirect
+sudo certbot --nginx -d ${DOMAIN} --non-interactive --agree-tos -m ${certbot_email} --redirect
 
 echo "Done."
 echo "Test these URLs:"

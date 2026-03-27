@@ -1,34 +1,23 @@
-key_name = "demo"
+# Copy this file to prod.tfvars and replace every placeholder before applying.
+# Do not commit the populated file.
 
-db_password = "ProdStrongPassword123!"
+key_name = "your-prod-key-pair"
 
-instance_type = "t3.small"
-
-root_block = {
-  size      = 20
-  type      = "gp3"
-  encrypted = true
-}
-
-db_instance_class = "db.t3.small"
-db_allocated_storage = 50
-
-tags = {
-  Project = "stock-pipeline"
-  Owner   = "zihan"
-  Env     = "production"
-}
-
+db_password = "replace-with-a-strong-prod-db-password"
 db_name     = "stock_pipeline"
-db_user     = "postgres"
 db_username = "postgres"
 
-bucket_name = "s3-stock-pipeline-data-prod"
-pipeline_source_bucket_name = "s3-stock-pipeline-data-prod"
-polygon_api_key = "your-polygon-api-key"
-llm_api_key = "your-llm-api-key"
-llm_model = "deepseek-chat"
-llm_base_url = "https://api.deepseek.com"
-monthly_event_tickers = "AMZN,TSLA,GOOGL,META,AAPL,MSFT,NVDA"
+bucket_name                 = "your-unique-chronostock-prod-bucket"
+pipeline_source_bucket_name = "your-unique-chronostock-prod-source-bucket"
 
-secret_name = "chrono-stock-rds-secret-dev"
+polygon_api_key = "replace-with-your-polygon-api-key"
+llm_api_key     = "replace-with-your-llm-api-key"
+llm_model       = "deepseek-chat"
+llm_base_url    = "https://api.deepseek.com"
+
+monthly_event_tickers = "TSLA,GOOGL,META,MSFT,NVDA"
+
+secret_name    = "your-chronostock-prod-secret"
+jwt_secret_key = "replace-with-a-long-random-jwt-secret"
+frontend_url   = "https://your-frontend-domain.example"
+certbot_email  = "your-email@example.com"
