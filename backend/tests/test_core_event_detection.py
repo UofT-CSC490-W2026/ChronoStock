@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 import textwrap
 from pathlib import Path
+import builtins
 
 from app.pipelines.core import event_detection
 from app.pipelines.core.event_detection import EventDetector
@@ -268,6 +269,57 @@ def test_load_data_reads_and_normalizes_price_and_news(tmp_path) -> None:
     assert str(detector.news_df.iloc[0]["published_utc"]) == "2026-01-05 00:00:00"
 
 
+def test_load_data_handles_empty_stock_csv(tmp_path) -> None:
+    detector = _build_detector(tmp_path)
+    (tmp_path / "stock.csv").write_text("", encoding="utf-8")
+
+    detector.load_data()
+
+    assert detector.price_df.empty
+    assert detector.news_df.empty
+    assert list(detector.news_df.columns) == ["published_utc"]
+
+
+def test_load_data_handles_empty_market_csv(tmp_path) -> None:
+    detector = _build_detector(tmp_path)
+    pd.DataFrame(
+        {
+            "Date": pd.date_range("2026-01-01", periods=3),
+            "Close": [100, 101, 102],
+        }
+    ).to_csv(tmp_path / "stock.csv", index=False)
+    (tmp_path / "market.csv").write_text("", encoding="utf-8")
+
+    detector.load_data()
+
+    assert detector.price_df.empty
+    assert detector.news_df.empty
+    assert list(detector.news_df.columns) == ["published_utc"]
+
+
+def test_load_data_handles_empty_news_csv(tmp_path) -> None:
+    detector = _build_detector(tmp_path)
+    pd.DataFrame(
+        {
+            "Date": pd.date_range("2026-01-01", periods=12),
+            "Close": [100 + i for i in range(12)],
+        }
+    ).to_csv(tmp_path / "stock.csv", index=False)
+    pd.DataFrame(
+        {
+            "Date": pd.date_range("2026-01-01", periods=12),
+            "Close": [200 + i for i in range(12)],
+        }
+    ).to_csv(tmp_path / "market.csv", index=False)
+    (tmp_path / "news.csv").write_text("", encoding="utf-8")
+
+    detector.load_data()
+
+    assert not detector.price_df.empty
+    assert detector.news_df.empty
+    assert list(detector.news_df.columns) == ["published_utc"]
+
+
 def test_setup_car_calls_model_methods_in_order(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     detector = _build_detector(tmp_path)
     calls = []
@@ -328,10 +380,11 @@ def test_real_main_block_executes_file_lines(monkeypatch: pytest.MonkeyPatch, tm
 
     monkeypatch.setattr(event_detection, "EventDetector", FakeDetector)
     printed = []
-    monkeypatch.setattr("builtins.print", lambda *args, **kwargs: printed.append(" ".join(str(a) for a in args)))
+    monkeypatch.setattr(builtins, "print", lambda *args, **kwargs: printed.append(" ".join(str(a) for a in args)))
 
     source_lines = Path(event_detection.__file__).read_text(encoding="utf-8").splitlines()
-    main_block = "\n" * 329 + textwrap.dedent("\n".join(source_lines[329:])) + "\n"
+    main_index = next(i for i, line in enumerate(source_lines) if line.startswith('if __name__ == "__main__":'))
+    main_block = "\n" * main_index + textwrap.dedent("\n".join(source_lines[main_index:])) + "\n"
     code = compile(main_block, event_detection.__file__, "exec")
     globals_dict = dict(event_detection.__dict__)
     globals_dict["__name__"] = "__main__"

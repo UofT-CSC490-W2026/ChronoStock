@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.python-version
+
+# Virtual environments
+.venv/
+venv/
+backend/.venv/
+
+# Pytest / coverage
+.pytest_cache/
+backend/.pytest_cache/
+backend/.pytest_tmp/
+.coverage
+.coverage.*
+backend/.coverage
+backend/.coverage.*
+coverage/
+backend/coverage/
+htmlcov/
+
+# Local runtime data
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment files
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env.local
+frontend/.env.*
+
+# Backend local cache/data
+backend/cache/
+backend/data/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/coverage/
+
+# Terraform local state
+Terraform/.terraform/
+*.tfstate
+*.tfstate.*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
