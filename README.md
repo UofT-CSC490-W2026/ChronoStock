@@ -49,7 +49,7 @@ _This section reports backend pytest-cov coverage and is updated automatically b
 
 ---
 
-## Local Setup
+## Local Run
 
 ### Prerequisites
 
@@ -90,6 +90,13 @@ Open `.env` and set a secret key for JWT:
 JWT_SECRET_KEY=any-long-random-string-you-choose
 ```
 
+Optional backend variables for local development:
+
+```env
+FRONTEND_URL=http://localhost:3000
+DB_BACKEND=sqlite
+```
+
 Start the API server:
 
 ```bash
@@ -126,9 +133,138 @@ The app is now running at `http://localhost:3000`.
 3. Click any ticker to see its price chart and fundamentals
 4. Click **Sign up** to create an account and unlock the watchlist
 
-## Deployment
+---
+
+## Terraform Deployment
+
+This repository also includes AWS infrastructure under `Terraform/` for an EC2 + RDS + S3 deployment.
+
+### Prerequisites
+
+- Terraform 1.5+
+- AWS credentials configured locally
+- An existing AWS EC2 key pair in the target region
+- A domain name if you want to enable HTTPS with Certbot
+
+### 1. Prepare a tfvars file
+
+```bash
+cd Terraform
+cp dev.tfvars.example dev.tfvars
+```
+
+For a production deployment, copy `prod.tfvars.example` to `prod.tfvars` instead.
+
+Fill in the placeholder values before running Terraform:
+
+- `key_name`
+- `db_password`
+- `bucket_name`
+- `pipeline_source_bucket_name`
+- `polygon_api_key`
+- `llm_api_key`
+- `jwt_secret_key`
+- `secret_name`
+- `frontend_url`
+- `certbot_email`
+- `monthly_event_tickers`
+
+Do not commit populated `dev.tfvars` or `prod.tfvars` files.
+
+### 2. Apply the infrastructure
+
+```bash
+terraform init
+terraform plan -var-file="dev.tfvars"
+terraform apply -var-file="dev.tfvars"
+```
+
+Useful outputs:
+
+```bash
+terraform output ec2_public_ip
+terraform output rds_host
+terraform output rds_port
+```
+
+### 3. What Terraform configures
+
+- An EC2 instance that pulls and runs the backend Docker image
+- An RDS PostgreSQL database
+- S3 buckets for application and pipeline data
+- AWS Secrets Manager values consumed by the EC2 bootstrap script
+- CloudWatch logging plus EventBridge Scheduler jobs for daily, hourly, and monthly pipelines
+
+### 4. EC2 bootstrap behavior
+
+During instance startup, the EC2 `user_data` script:
+
+- Fetches database and API secrets from AWS Secrets Manager
+- Writes `/home/ec2-user/backend.env`
+- Starts the backend container on port `8000`
+- Installs helper scripts for daily, hourly, and monthly pipeline runs
+
+The monthly event pipeline reads the ticker list from `monthly_event_tickers` in your tfvars file.
+
+### 5. HTTPS setup
+
+The instance includes a helper script at `/home/ec2-user/setup_https.sh` that installs nginx and certbot, validates nginx config, reloads nginx, and requests a certificate using `certbot_email`.
+
+If you use this script:
+
+- Point your domain DNS to the EC2 public IP first
+- Verify the domain configured in the script matches your deployment domain
+- Run the script manually after the instance is reachable
+
+### 6. Frontend deployment
+
+The frontend is deployed separately on Vercel.
+
+Required Vercel environment variables:
+
+```env
+NEXT_PUBLIC_MOCK_AUTH=false
+NEXT_PUBLIC_API_URL=https://api.chronostock.shop
+```
+
+Recommended Vercel project settings:
+
+- Root directory: `frontend`
+- Install command: `npm install`
+- Build command: `npm run build`
+- Framework preset: Next.js
+
+Deployment flow:
+
+1. Import the repository into Vercel
+2. Set the root directory to `frontend`
+3. Add the environment variables above
+4. Deploy the project
 
 - Frontend app: https://chrono-stock2.vercel.app/
+
+Point `frontend_url` in Terraform at the frontend origin that should be allowed by backend CORS.
+
+### 7. Backend domain and frontend connectivity
+
+The backend is deployed on AWS EC2 and exposed through a custom HTTPS domain:
+
+- Backend API: `https://api.chronostock.shop`
+
+The custom domain is required for the hosted frontend:
+
+- The frontend is served over HTTPS on Vercel
+- Browsers block mixed-content requests from an HTTPS frontend to an HTTP backend
+- Backend CORS depends on the deployed frontend origin configured in `frontend_url`
+
+To connect a deployed frontend to your own backend:
+
+1. Point your backend domain DNS record at the EC2 public IP
+2. Ensure the nginx/certbot helper script is configured for that domain
+3. Run `/home/ec2-user/setup_https.sh` after DNS propagation
+4. Set `NEXT_PUBLIC_API_URL` in Vercel to your backend HTTPS URL
+
+For local development, the frontend can call `http://localhost:8000` instead of the deployed API.
 
 ---
 

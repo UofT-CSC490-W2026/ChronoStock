@@ -165,6 +165,7 @@ module "ec2" {
   log_group_name    = aws_cloudwatch_log_group.pipeline_logs.name
   secret_name       = var.secret_name
   frontend_url      = var.frontend_url
+  certbot_email     = var.certbot_email
   bucket_name       = var.bucket_name
   llm_model         = var.llm_model
   llm_base_url      = var.llm_base_url

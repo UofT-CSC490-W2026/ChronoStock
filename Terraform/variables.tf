@@ -75,3 +75,8 @@ variable "frontend_url" {
   description = "Allowed frontend origin for backend CORS"
   type        = string
 }
+
+variable "certbot_email" {
+  description = "Email address used by certbot for HTTPS certificate registration"
+  type        = string
+}
