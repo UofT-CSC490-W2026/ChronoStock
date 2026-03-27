@@ -7,6 +7,7 @@ Sources:
 """
 
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 
 import httpx
@@ -140,79 +141,89 @@ def _yf_level(ticker: str, name: str, unit: str, description: str) -> MacroIndic
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 def fetch_market_summary() -> MarketSummary:
-    def collect(*indicators: MacroIndicator | None) -> list[MacroIndicator]:
-        return [i for i in indicators if i is not None]
-
-    categories = [
-        MacroCategory(
-            name="Interest Rates & Yield Curve",
-            indicators=collect(
-                _fred_level("DFF", "Fed Funds Rate", "%",
-                            "Effective Federal Funds Rate — the Fed's primary policy lever"),
-                _yf_level("^TNX", "10Y Treasury Yield", "%",
-                          "10-Year US Treasury yield — benchmark for mortgages and long-term debt"),
-                _yf_level("^FVX", "5Y Treasury Yield", "%",
-                          "5-Year US Treasury yield — midpoint of the curve"),
-                _fred_level("T10Y2Y", "Yield Curve (10Y-2Y)", "pp",
-                            "10Y minus 2Y Treasury spread — inversion signals recession risk"),
-            ),
-        ),
-        MacroCategory(
-            name="Inflation",
-            indicators=collect(
-                _fred_yoy("CPIAUCSL", "CPI (YoY)",
-                          "Consumer Price Index — headline inflation including food and energy"),
-                _fred_yoy("CPILFESL", "Core CPI (YoY)",
-                          "CPI excluding food and energy — less volatile signal the Fed watches closely"),
-                _fred_yoy("PCEPI", "PCE (YoY)",
-                          "Personal Consumption Expenditures price index"),
-                _fred_yoy("PCEPILFE", "Core PCE (YoY)",
-                          "PCE excluding food and energy — the Fed's preferred inflation gauge"),
-                _fred_level("T10YIE", "10Y Breakeven Inflation", "%",
-                            "Market-implied 10-year inflation expectation derived from TIPS spreads"),
-            ),
-        ),
-        MacroCategory(
-            name="Labor Market",
-            indicators=collect(
-                _fred_monthly_change("PAYEMS", "Non-Farm Payroll", "K jobs",
-                                     "Monthly change in total nonfarm employees — the headline jobs number"),
-                _fred_level("UNRATE", "Unemployment Rate", "%",
-                            "U-3 unemployment rate — share of labor force actively seeking work"),
-                _fred_level("ICSA", "Initial Jobless Claims", "K",
-                            "Weekly new unemployment filings — leading indicator of labor market stress"),
-                _fred_level("JTSJOL", "JOLTS Job Openings", "K",
-                            "Total job openings from the JOLTS survey — measures unfilled labor demand"),
-            ),
-        ),
-        MacroCategory(
-            name="Market Sentiment",
-            indicators=collect(
-                _yf_level("^VIX", "VIX", "pts",
-                          "CBOE Volatility Index — 30-day implied volatility of S&P 500 options (the 'fear gauge')"),
-                _yf_level("^GSPC", "S&P 500", "pts",
-                          "S&P 500 index — benchmark for US large-cap equities"),
-                _fred_level("BAMLH0A0HYM2", "HY Credit Spread", "pp",
-                            "High Yield OAS spread over Treasuries — elevated spread = risk aversion in credit markets"),
-            ),
-        ),
-        MacroCategory(
-            name="Commodities & Currency",
-            indicators=collect(
-                _yf_level("DX-Y.NYB", "US Dollar (DXY)", "pts",
-                          "US Dollar Index — USD vs basket of major currencies; strong dollar pressures multinational earnings"),
-                _yf_level("GC=F", "Gold", "$/oz",
-                          "Gold futures — safe haven asset and inflation hedge"),
-                _yf_level("CL=F", "WTI Crude Oil", "$/bbl",
-                          "West Texas Intermediate crude oil futures — energy cost benchmark"),
-                _yf_level("HG=F", "Copper", "$/lb",
-                          "'Dr. Copper' — copper demand leads economic cycles due to broad industrial use"),
-            ),
-        ),
+    # Define all indicator fetch tasks: (category_name, order_within_category, callable)
+    tasks: list[tuple[str, int, callable]] = [
+        # Interest Rates & Yield Curve
+        ("Interest Rates & Yield Curve", 0, lambda: _fred_level("DFF", "Fed Funds Rate", "%",
+                    "Effective Federal Funds Rate — the Fed's primary policy lever")),
+        ("Interest Rates & Yield Curve", 1, lambda: _yf_level("^TNX", "10Y Treasury Yield", "%",
+                  "10-Year US Treasury yield — benchmark for mortgages and long-term debt")),
+        ("Interest Rates & Yield Curve", 2, lambda: _yf_level("^FVX", "5Y Treasury Yield", "%",
+                  "5-Year US Treasury yield — midpoint of the curve")),
+        ("Interest Rates & Yield Curve", 3, lambda: _fred_level("T10Y2Y", "Yield Curve (10Y-2Y)", "pp",
+                    "10Y minus 2Y Treasury spread — inversion signals recession risk")),
+        # Inflation
+        ("Inflation", 0, lambda: _fred_yoy("CPIAUCSL", "CPI (YoY)",
+                  "Consumer Price Index — headline inflation including food and energy")),
+        ("Inflation", 1, lambda: _fred_yoy("CPILFESL", "Core CPI (YoY)",
+                  "CPI excluding food and energy — less volatile signal the Fed watches closely")),
+        ("Inflation", 2, lambda: _fred_yoy("PCEPI", "PCE (YoY)",
+                  "Personal Consumption Expenditures price index")),
+        ("Inflation", 3, lambda: _fred_yoy("PCEPILFE", "Core PCE (YoY)",
+                  "PCE excluding food and energy — the Fed's preferred inflation gauge")),
+        ("Inflation", 4, lambda: _fred_level("T10YIE", "10Y Breakeven Inflation", "%",
+                    "Market-implied 10-year inflation expectation derived from TIPS spreads")),
+        # Labor Market
+        ("Labor Market", 0, lambda: _fred_monthly_change("PAYEMS", "Non-Farm Payroll", "K jobs",
+                                 "Monthly change in total nonfarm employees — the headline jobs number")),
+        ("Labor Market", 1, lambda: _fred_level("UNRATE", "Unemployment Rate", "%",
+                    "U-3 unemployment rate — share of labor force actively seeking work")),
+        ("Labor Market", 2, lambda: _fred_level("ICSA", "Initial Jobless Claims", "K",
+                    "Weekly new unemployment filings — leading indicator of labor market stress")),
+        ("Labor Market", 3, lambda: _fred_level("JTSJOL", "JOLTS Job Openings", "K",
+                    "Total job openings from the JOLTS survey — measures unfilled labor demand")),
+        # Market Sentiment
+        ("Market Sentiment", 0, lambda: _yf_level("^VIX", "VIX", "pts",
+                  "CBOE Volatility Index — 30-day implied volatility of S&P 500 options (the 'fear gauge')")),
+        ("Market Sentiment", 1, lambda: _yf_level("^GSPC", "S&P 500", "pts",
+                  "S&P 500 index — benchmark for US large-cap equities")),
+        ("Market Sentiment", 2, lambda: _fred_level("BAMLH0A0HYM2", "HY Credit Spread", "pp",
+                    "High Yield OAS spread over Treasuries — elevated spread = risk aversion in credit markets")),
+        # Commodities & Currency
+        ("Commodities & Currency", 0, lambda: _yf_level("DX-Y.NYB", "US Dollar (DXY)", "pts",
+                  "US Dollar Index — USD vs basket of major currencies; strong dollar pressures multinational earnings")),
+        ("Commodities & Currency", 1, lambda: _yf_level("GC=F", "Gold", "$/oz",
+                  "Gold futures — safe haven asset and inflation hedge")),
+        ("Commodities & Currency", 2, lambda: _yf_level("CL=F", "WTI Crude Oil", "$/bbl",
+                  "West Texas Intermediate crude oil futures — energy cost benchmark")),
+        ("Commodities & Currency", 3, lambda: _yf_level("HG=F", "Copper", "$/lb",
+                  "'Dr. Copper' — copper demand leads economic cycles due to broad industrial use")),
     ]
 
+    # Execute all API calls in parallel
+    results: dict[tuple[str, int], MacroIndicator | None] = {}
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_key = {
+            executor.submit(fn): (cat, idx)
+            for cat, idx, fn in tasks
+        }
+        for future in as_completed(future_to_key):
+            key = future_to_key[future]
+            try:
+                results[key] = future.result()
+            except Exception:
+                results[key] = None
+
+    # Reassemble categories in original order
+    category_order = [
+        "Interest Rates & Yield Curve",
+        "Inflation",
+        "Labor Market",
+        "Market Sentiment",
+        "Commodities & Currency",
+    ]
+    categories: list[MacroCategory] = []
+    for cat_name in category_order:
+        cat_indicators = sorted(
+            [(idx, ind) for (c, idx), ind in results.items() if c == cat_name and ind is not None],
+            key=lambda t: t[0],
+        )
+        indicators = [ind for _, ind in cat_indicators]
+        if indicators:
+            categories.append(MacroCategory(name=cat_name, indicators=indicators))
+
     return MarketSummary(
-        categories=[c for c in categories if c.indicators],
+        categories=categories,
         cachedAt=datetime.now(timezone.utc).isoformat(),
     )
 

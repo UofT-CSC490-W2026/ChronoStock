@@ -1,0 +1,29 @@
+         5355663 function calls (4967253 primitive calls) in 21.003 seconds
+
+   Ordered by: cumulative time
+   List reduced from 5121 to 77 due to restriction <'/Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app'>
+   List reduced from 77 to 20 due to restriction <20>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000   16.803   16.803 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/main.py:361(get_market_analysis)
+        1    0.000    0.000   16.755   16.755 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/analysis.py:55(generate_market_analysis)
+        1    0.000    0.000    0.934    0.934 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/main.py:101(get_stock)
+        1    0.001    0.001    0.757    0.757 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/stock.py:15(fetch_bars)
+        1    0.000    0.000    0.749    0.749 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/stock.py:53(fetch_info)
+        1    0.000    0.000    0.736    0.736 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/main.py:165(get_earnings)
+        1    0.000    0.000    0.736    0.736 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/stock.py:100(fetch_earnings_dates)
+        1    0.000    0.000    0.601    0.601 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/main.py:299(get_market_summary)
+        1    0.000    0.000    0.600    0.600 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/macro.py:143(fetch_market_summary)
+        1    0.000    0.000    0.587    0.587 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/macro.py:180(<lambda>)
+      7/1    0.000    0.000    0.587    0.587 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/macro.py:40(_fred_level)
+     12/1    0.000    0.000    0.587    0.587 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/macro.py:24(_fred_obs)
+        1    0.000    0.000    0.573    0.573 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/macro.py:185(<lambda>)
+      8/1    0.000    0.000    0.573    0.573 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/macro.py:116(_yf_level)
+        1    0.000    0.000    0.516    0.516 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/macro.py:169(<lambda>)
+        1    0.000    0.000    0.515    0.515 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/macro.py:183(<lambda>)
+        1    0.000    0.000    0.506    0.506 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/macro.py:171(<lambda>)
+        1    0.000    0.000    0.493    0.493 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/macro.py:187(<lambda>)
+        1    0.000    0.000    0.481    0.481 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/macro.py:173(<lambda>)
+        1    0.000    0.000    0.449    0.449 /Users/david/Desktop/Uoft/大四/CSC490/ChronoStock/backend/app/macro.py:178(<lambda>)
+
+

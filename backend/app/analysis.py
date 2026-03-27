@@ -41,46 +41,31 @@ def _build_macro_context(summary: MarketSummary) -> str:
     return "\n".join(lines)
 
 
+_bedrock_client = None
+
+
+def _get_bedrock_client():
+    """Reuse a single Bedrock client instead of creating one per request."""
+    global _bedrock_client
+    if _bedrock_client is None:
+        _bedrock_client = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
+    return _bedrock_client
+
+
 def generate_market_analysis(summary: MarketSummary) -> MarketAnalysis:
     macro_context = _build_macro_context(summary)
 
-    prompt = f"""You are a seasoned macroeconomic and financial markets analyst. \
-    Analyze the following current macroeconomic indicator data and produce a comprehensive \
-    market analysis narrative.
+    prompt = f"""You are a macro-financial analyst. Analyze this data and return ONLY a JSON object.
 
-    CURRENT MACROECONOMIC DATA (as of today):
-    {macro_context}
+DATA:
+{macro_context}
 
-    Produce a JSON response with exactly this structure — no markdown, no extra text, only valid JSON:
-    {{
-      "regime": "1-2 sentence description of the current market regime",
-      "regimeSentiment": "bullish" | "bearish" | "neutral" | "mixed",
-      "summary": "One sentence capturing where markets stand right now",
-      "narrative": "3-4 paragraphs. Explain what has been happening — what the Fed has done, how inflation has evolved, what the labor market shows, and how risk assets have responded. Be specific: cite actual data values from above.",
-      "keyDrivers": [
-        {{
-          "title": "Short driver name (3-5 words)",
-          "explanation": "2-3 sentences on how this force is driving markets and what it means for investors",
-          "sentiment": "positive" | "negative" | "neutral"
-        }}
-      ],
-      "historicalContext": "1-2 paragraphs comparing current conditions to prior cycles (e.g. 2022 tightening, 2020 COVID stimulus, 2008 GFC) where relevant. Help the reader understand if this is historically unusual.",
-      "watchlist": [
-        {{
-          "indicator": "Name of the indicator",
-          "currentSignal": "What the current reading is signalling",
-          "whyItMatters": "Why this indicator is particularly important to watch right now"
-        }}
-      ]
-    }}
+JSON schema:
+{{"regime":"1-2 sentences on current regime","regimeSentiment":"bullish|bearish|neutral|mixed","summary":"one sentence","narrative":"3-4 paragraphs citing data values","keyDrivers":[{{"title":"3-5 words","explanation":"2-3 sentences","sentiment":"positive|negative|neutral"}}],"historicalContext":"1-2 paragraphs comparing to prior cycles","watchlist":[{{"indicator":"name","currentSignal":"signal","whyItMatters":"reason"}}]}}
 
-    Rules:
-    - Include 3-5 key drivers and 3-4 watchlist items.
-    - Connect cause and effect between indicators — e.g. how rate levels affect credit spreads, how payrolls affect Fed expectations.
-    - Use plain English; avoid jargon that non-professionals would not understand.
-    - Return only the JSON object. No preamble, no markdown code fences."""
+Rules: 3-5 key drivers, 3-4 watchlist items. Connect cause and effect. Plain English. JSON only."""
 
-    client = boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
+    client = _get_bedrock_client()
 
     response = client.converse(
         modelId=BEDROCK_MODEL_ID,
@@ -90,7 +75,7 @@ def generate_market_analysis(summary: MarketSummary) -> MarketAnalysis:
                 "content": [{"text": prompt}],
             }
         ],
-        inferenceConfig={"maxTokens": 8192},
+        inferenceConfig={"maxTokens": 4096},
     )
 
     stop_reason = response.get("stopReason", "")

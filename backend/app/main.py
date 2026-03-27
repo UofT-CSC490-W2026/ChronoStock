@@ -1,5 +1,6 @@
 import os
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
@@ -123,8 +124,11 @@ def get_stock(
         full = StockResponse(**{k: v for k, v in cached.items() if k != "cached_at"})
     else:
         try:
-            bars = fetch_bars(ticker)
-            company_name, meta, asset_type = fetch_info(ticker)
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                bars_future = executor.submit(fetch_bars, ticker)
+                info_future = executor.submit(fetch_info, ticker)
+                bars = bars_future.result()
+                company_name, meta, asset_type = info_future.result()
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
         except Exception as e:

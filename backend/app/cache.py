@@ -1,12 +1,16 @@
 """
-File-based persistent cache.
+File-based persistent cache with in-memory L1 layer.
 
 Local dev  : JSON files written to ./cache/ on disk.
 AWS deploy : JSON files written to an S3 bucket (set CACHE_BACKEND=s3).
 Redis      : JSON values written to Redis (set CACHE_BACKEND=redis).
+
+An in-memory LRU dict sits in front of the backend to avoid repeated
+serialization / I/O for frequently accessed keys.
 """
 import json
 import os
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +21,26 @@ S3_PREFIX = os.environ.get("S3_CACHE_PREFIX", "chronostock/cache/")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 REDIS_PREFIX = os.environ.get("REDIS_CACHE_PREFIX", "chronostock/cache/")
 REDIS_CACHE_TTL_SECONDS = int(os.environ.get("REDIS_CACHE_TTL_SECONDS", "86400"))
+
+# ── In-memory L1 cache (LRU) ────────────────────────────────────────────────
+_L1_MAX_SIZE = int(os.environ.get("L1_CACHE_MAX_SIZE", "64"))
+_l1_cache: OrderedDict[str, Any] = OrderedDict()
+
+
+def _l1_get(key: str) -> tuple[bool, Any]:
+    """Return (hit, value). On hit, move key to end (most-recently-used)."""
+    if key in _l1_cache:
+        _l1_cache.move_to_end(key)
+        return True, _l1_cache[key]
+    return False, None
+
+
+def _l1_set(key: str, value: Any) -> None:
+    """Insert/update a key and evict the oldest entry if over capacity."""
+    _l1_cache[key] = value
+    _l1_cache.move_to_end(key)
+    while len(_l1_cache) > _L1_MAX_SIZE:
+        _l1_cache.popitem(last=False)
 
 
 def _filename(key: str) -> str:
@@ -110,20 +134,32 @@ def _redis_set(key: str, value: Any) -> None:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def get(key: str) -> Any | None:
+    # L1 in-memory check first
+    hit, value = _l1_get(key)
+    if hit:
+        return value
+
+    # Fall through to backend
     if CACHE_BACKEND == "s3":
-        return _s3_get(key)
+        value = _s3_get(key)
     elif CACHE_BACKEND == "redis":
-        return _redis_get(key)
+        value = _redis_get(key)
     else:
-        return _local_get(key)
+        value = _local_get(key)
+
+    # Populate L1 on backend hit
+    if value is not None:
+        _l1_set(key, value)
+    return value
 
 
 def set(key: str, value: Any) -> None:
+    # Write-through: update L1 and backend
+    _l1_set(key, value)
+
     if CACHE_BACKEND == "s3":
         _s3_set(key, value)
-        return
     elif CACHE_BACKEND == "redis":
         _redis_set(key, value)
-        return
     else:
         _local_set(key, value)

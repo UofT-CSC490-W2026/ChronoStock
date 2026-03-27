@@ -5,6 +5,9 @@ We always fetch the full available history (period="max") and store it as one
 file per ticker. Range filtering happens in main.py after reading from cache.
 """
 from datetime import datetime, timezone
+from functools import lru_cache
+from time import time
+
 import yfinance as yf
 from .models import OHLCBar, StockMeta, StockNews, EarningsDate
 
@@ -197,7 +200,19 @@ def fetch_news(ticker: str, limit: int = 12) -> list[StockNews]:
     return items
 
 
+_search_cache: dict[str, tuple[float, list[dict]]] = {}
+_SEARCH_CACHE_TTL = 300  # 5 minutes
+
+
 def search_tickers(query: str) -> list[dict]:
+    query_lower = query.strip().lower()
+
+    # Check in-memory cache with TTL
+    if query_lower in _search_cache:
+        cached_at, cached_results = _search_cache[query_lower]
+        if time() - cached_at < _SEARCH_CACHE_TTL:
+            return cached_results
+
     results = []
     try:
         hits = yf.Search(query, max_results=6).quotes
@@ -208,4 +223,6 @@ def search_tickers(query: str) -> list[dict]:
                 results.append({"ticker": sym, "companyName": name})
     except Exception:
         pass
+
+    _search_cache[query_lower] = (time(), results)
     return results
