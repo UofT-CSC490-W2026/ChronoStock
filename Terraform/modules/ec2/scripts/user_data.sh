@@ -126,7 +126,7 @@ set -e
 /usr/bin/docker pull zihan123/chronostock-backend:latest
 /usr/bin/docker run --rm \
   --env-file /home/ec2-user/backend.env \
-  -e DAILY_UPDATE_TICKERS="AAPL,MSFT,NVDA,TSLA" \
+  -e DAILY_UPDATE_TICKERS="AMZN,TSLA,GOOGL,META,AAPL,MSFT,NVDA" \
   zihan123/chronostock-backend:latest \
   python -m app.pipelines.run_daily_update
 EOF
@@ -139,7 +139,7 @@ set -e
 /usr/bin/docker pull zihan123/chronostock-backend:latest
 /usr/bin/docker run --rm \
   --env-file /home/ec2-user/backend.env \
-  -e DAILY_UPDATE_TICKERS="AAPL,MSFT,NVDA,TSLA" \
+  -e DAILY_UPDATE_TICKERS="AMZN,TSLA,GOOGL,META,AAPL,MSFT,NVDA" \
   zihan123/chronostock-backend:latest \
   python -m app.pipelines.run_hourly_update
 EOF
@@ -154,10 +154,115 @@ set -e
   --env-file /home/ec2-user/backend.env \
   -e PIPELINE_END_DATE="$(date -u +%F)" \
   zihan123/chronostock-backend:latest \
-  python -m app.pipelines.run_monthly_event_pipeline --tickers "${monthly_event_tickers}"
+  python -m app.pipelines.run_monthly_event_pipeline --tickers "AMZN,TSLA,GOOGL,META,AAPL,MSFT,NVDA"
 EOF
 chmod +x /home/ec2-user/run_monthly_event_pipeline.sh
 chown ec2-user:ec2-user /home/ec2-user/run_monthly_event_pipeline.sh
+
+cat <<'EOF' > /home/ec2-user/setup_hourly_cloudwatch.sh
+#!/bin/bash
+set -e
+
+LOG_GROUP="/stock-pipeline/app"
+CW_CONFIG="/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json"
+CW_CTL="/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl"
+
+echo "Ensuring hourly log file exists..."
+touch /home/ec2-user/hourly_update.log
+chown ec2-user:ec2-user /home/ec2-user/hourly_update.log
+
+echo "Writing CloudWatch Agent config..."
+sudo tee "$CW_CONFIG" > /dev/null <<EOF_INNER
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/home/ec2-user/backend.log",
+            "log_group_name": "${LOG_GROUP}",
+            "log_stream_name": "{instance_id}"
+          },
+          {
+            "file_path": "/home/ec2-user/daily_update.log",
+            "log_group_name": "${LOG_GROUP}",
+            "log_stream_name": "{instance_id}-daily-update"
+          },
+          {
+            "file_path": "/home/ec2-user/hourly_update.log",
+            "log_group_name": "${LOG_GROUP}",
+            "log_stream_name": "{instance_id}-hourly-update"
+          }
+        ]
+      }
+    }
+  }
+}
+EOF_INNER
+
+echo "Reloading CloudWatch Agent..."
+sudo "$CW_CTL" \
+  -a fetch-config \
+  -m ec2 \
+  -c "file:${CW_CONFIG}" \
+  -s
+
+echo "Running hourly update once for verification..."
+bash /home/ec2-user/run_hourly_update.sh
+
+echo "Done."
+echo "Check CloudWatch Logs group: ${LOG_GROUP}"
+echo "Expected stream name suffix: -hourly-update"
+EOF
+chmod +x /home/ec2-user/setup_hourly_cloudwatch.sh
+chown ec2-user:ec2-user /home/ec2-user/setup_hourly_cloudwatch.sh
+
+cat <<'EOF' > /home/ec2-user/setup_https.sh
+#!/bin/bash
+set -e
+
+DOMAIN="api.chronostock.shop"
+UPSTREAM="http://127.0.0.1:8000"
+
+echo "Installing nginx and certbot..."
+sudo dnf install -y nginx certbot python3-certbot-nginx
+
+echo "Enabling nginx..."
+sudo systemctl enable --now nginx
+
+echo "Writing nginx config..."
+sudo tee /etc/nginx/conf.d/chronostock.conf > /dev/null <<EOF_INNER
+server {
+    listen 80;
+    server_name ${DOMAIN};
+
+    location / {
+        proxy_pass ${UPSTREAM};
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF_INNER
+
+echo "Testing nginx config..."
+sudo nginx -t
+
+echo "Reloading nginx..."
+sudo systemctl reload nginx
+
+echo "Requesting HTTPS certificate..."
+sudo certbot --nginx -d ${DOMAIN} --non-interactive --agree-tos -m sibdbdxhhhd@gmail.com --redirect
+
+echo "Done."
+echo "Test these URLs:"
+echo "http://${DOMAIN}/docs"
+echo "https://${DOMAIN}/docs"
+EOF
+chmod +x /home/ec2-user/setup_https.sh
+chown ec2-user:ec2-user /home/ec2-user/setup_https.sh
 
 ############################################
 # Initial backend deploy
