@@ -94,8 +94,40 @@ def test_run_filters_dates_and_skips_failed_batches(capsys: pytest.CaptureFixtur
 
     assert set(selected) == {"a2", "b1"}
     output = capsys.readouterr().out
-    assert "Skipping failed batch" in output
-    assert "LLM filtering skipped" in output
+    assert "Retrying failed batch 2/2 (attempt 2/3)" in output
+    assert "LLM filtering skipped" not in output
+
+
+def test_call_llm_with_retries_retries_up_to_three_times() -> None:
+    calls = {"count": 0}
+
+    def fake_llm(_prompt: str):
+        calls["count"] += 1
+        if calls["count"] < 3:
+            raise RuntimeError(f"temporary-{calls['count']}")
+        return [{"generated_text": "['a1']"}]
+
+    filter_pipeline = llm.NewsLLMFilter(llm=fake_llm, max_retries=3)
+
+    output = filter_pipeline.call_llm_with_retries("prompt", 1, 2)
+
+    assert output == "['a1']"
+    assert calls["count"] == 3
+
+
+def test_call_llm_with_retries_raises_after_last_attempt() -> None:
+    calls = {"count": 0}
+
+    def fake_llm(_prompt: str):
+        calls["count"] += 1
+        raise RuntimeError("still failing")
+
+    filter_pipeline = llm.NewsLLMFilter(llm=fake_llm, max_retries=3)
+
+    with pytest.raises(RuntimeError, match="still failing"):
+        filter_pipeline.call_llm_with_retries("prompt", 1, 1)
+
+    assert calls["count"] == 3
 
 
 def test_load_events_validates_required_columns(tmp_path) -> None:
@@ -247,7 +279,8 @@ def test_real_main_block_invokes_main(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(llm, "main", lambda: calls.append("main"))
 
     source_lines = Path(llm.__file__).read_text(encoding="utf-8").splitlines()
-    main_block = "\n" * 233 + textwrap.dedent("\n".join(source_lines[233:])) + "\n"
+    main_index = next(i for i, line in enumerate(source_lines) if line.startswith('if __name__ == "__main__":'))
+    main_block = "\n" * main_index + textwrap.dedent("\n".join(source_lines[main_index:])) + "\n"
     code = compile(main_block, llm.__file__, "exec")
     globals_dict = dict(llm.__dict__)
     globals_dict["__name__"] = "__main__"

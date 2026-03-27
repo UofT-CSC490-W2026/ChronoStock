@@ -62,9 +62,10 @@ class ChatCompletionsLLM:
 
 
 class NewsLLMFilter:
-    def __init__(self, llm, batch_size=100):
+    def __init__(self, llm, batch_size=100, max_retries=3):
         self.llm = llm
         self.batch_size = batch_size
+        self.max_retries = max_retries
 
     def format_news_block(self, df):
         lines = []
@@ -125,6 +126,20 @@ class NewsLLMFilter:
                 continue
         return []
 
+    def call_llm_with_retries(self, prompt, batch_index, total_batches):
+        last_error = None
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                return self.llm(prompt)[0]["generated_text"]
+            except Exception as exc:
+                last_error = exc
+                if attempt < self.max_retries:
+                    print(
+                        f"Retrying failed batch {batch_index}/{total_batches} "
+                        f"(attempt {attempt + 1}/{self.max_retries}): {exc}"
+                    )
+        raise last_error
+
     def run(self, df, start_date=None, end_date=None):
         if start_date is not None:
             df = df[df["published_utc"] >= pd.Timestamp(start_date)]
@@ -141,7 +156,7 @@ class NewsLLMFilter:
             news_block = self.format_news_block(batch)
             prompt = PROMPT_TEMPLATE.format(news_block=news_block)
             try:
-                output = self.llm(prompt)[0]["generated_text"]
+                output = self.call_llm_with_retries(prompt, index, len(batches))
             except Exception as exc:
                 failed_batches.append(
                     {
