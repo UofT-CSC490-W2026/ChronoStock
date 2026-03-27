@@ -217,11 +217,53 @@ If you use this script:
 
 ### 6. Frontend deployment
 
-The frontend is currently deployed separately:
+The frontend is deployed separately on Vercel.
+
+Required Vercel environment variables:
+
+```env
+NEXT_PUBLIC_MOCK_AUTH=false
+NEXT_PUBLIC_API_URL=https://api.chronostock.shop
+```
+
+Recommended Vercel project settings:
+
+- Root directory: `frontend`
+- Install command: `npm install`
+- Build command: `npm run build`
+- Framework preset: Next.js
+
+Deployment flow:
+
+1. Import the repository into Vercel
+2. Set the root directory to `frontend`
+3. Add the environment variables above
+4. Deploy the project
 
 - Frontend app: https://chrono-stock2.vercel.app/
 
 Point `frontend_url` in Terraform at the frontend origin that should be allowed by backend CORS.
+
+### 7. Backend domain and frontend connectivity
+
+The backend is deployed on AWS EC2 and exposed through a custom HTTPS domain:
+
+- Backend API: `https://api.chronostock.shop`
+
+The custom domain is required for the hosted frontend:
+
+- The frontend is served over HTTPS on Vercel
+- Browsers block mixed-content requests from an HTTPS frontend to an HTTP backend
+- Backend CORS depends on the deployed frontend origin configured in `frontend_url`
+
+To connect a deployed frontend to your own backend:
+
+1. Point your backend domain DNS record at the EC2 public IP
+2. Ensure the nginx/certbot helper script is configured for that domain
+3. Run `/home/ec2-user/setup_https.sh` after DNS propagation
+4. Set `NEXT_PUBLIC_API_URL` in Vercel to your backend HTTPS URL
+
+For local development, the frontend can call `http://localhost:8000` instead of the deployed API.
 
 ---
 
