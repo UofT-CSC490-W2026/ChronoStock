@@ -22,13 +22,14 @@ _This section reports frontend Jest coverage and is updated automatically by Git
 <!-- backend-coverage:start -->
 ## Backend Test Coverage
 
-![Backend Coverage](https://img.shields.io/badge/backend%20coverage-98.86%25-brightgreen)
+![Backend Coverage](https://img.shields.io/badge/backend%20coverage-98.84%25-brightgreen)
 
 | Metric | Coverage |
 | --- | ---: |
-| Lines | 98.86% |
-| Statements | 100.00% |
-| Branches | 94.35% |
+| Lines | 98.84% |
+| Statements | 99.96% |
+| Branches | 94.21% |
+| Functions | N/A |
 
 _This section reports backend pytest-cov coverage and is updated automatically by GitHub Actions._
 <!-- backend-coverage:end -->
