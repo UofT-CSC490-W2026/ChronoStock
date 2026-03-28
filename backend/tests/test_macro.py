@@ -266,6 +266,54 @@ def test_fetch_market_summary_keeps_multiple_categories(monkeypatch) -> None:
     assert all(category.indicators for category in summary.categories)
 
 
+def test_fetch_market_summary_handles_future_exception(monkeypatch) -> None:
+    class FakeFuture:
+        def __init__(self, result=None, exc=None):
+            self._result = result
+            self._exc = exc
+
+        def result(self):
+            if self._exc:
+                raise self._exc
+            return self._result
+
+    class FakeExecutor:
+        def __init__(self):
+            self._index = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def submit(self, fn):
+            future = self.futures[self._index]
+            self._index += 1
+            return future
+
+    indicator = macro.MacroIndicator(
+        name="Fed Funds Rate",
+        value=5.0,
+        previousValue=4.5,
+        change=0.5,
+        changePct=None,
+        unit="%",
+        description="Rates",
+        source="FRED",
+        asOf="2026-03-01",
+    )
+    fake_executor = FakeExecutor()
+    fake_executor.futures = [FakeFuture(result=indicator)] + [FakeFuture(exc=RuntimeError("boom")) for _ in range(24)]
+
+    monkeypatch.setattr(macro, "ThreadPoolExecutor", lambda max_workers=10: fake_executor)
+    monkeypatch.setattr(macro, "as_completed", lambda futures: list(futures))
+
+    summary = macro.fetch_market_summary()
+
+    assert any(category.name == "Interest Rates & Yield Curve" for category in summary.categories)
+
+
 def test_fetch_indicator_history_raises_for_unknown_indicator() -> None:
     with pytest.raises(ValueError, match="Unknown indicator"):
         macro.fetch_indicator_history("Nope")

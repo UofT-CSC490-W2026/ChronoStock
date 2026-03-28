@@ -234,6 +234,8 @@ def test_fetch_news_falls_back_when_pub_date_is_invalid(monkeypatch: pytest.Monk
 
 
 def test_search_tickers_success_and_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    stock._search_cache.clear()
+
     class FakeSearch:
         def __init__(self, *_args, **_kwargs):
             self.quotes = [
@@ -253,4 +255,48 @@ def test_search_tickers_success_and_failure(monkeypatch: pytest.MonkeyPatch) -> 
         raise RuntimeError("search broken")
 
     monkeypatch.setattr(stock.yf, "Search", broken_search)
-    assert stock.search_tickers("n") == []
+    assert stock.search_tickers("other") == []
+
+
+def test_search_tickers_uses_cached_results_until_ttl_expires(monkeypatch: pytest.MonkeyPatch) -> None:
+    stock._search_cache.clear()
+    calls = {"count": 0}
+
+    class FakeSearch:
+        def __init__(self, *_args, **_kwargs):
+            calls["count"] += 1
+            self.quotes = [{"symbol": "NVDA", "longname": "NVIDIA"}]
+
+    now = {"value": 1000.0}
+    monkeypatch.setattr(stock.yf, "Search", FakeSearch)
+    monkeypatch.setattr(stock, "time", lambda: now["value"])
+
+    first = stock.search_tickers("nvda")
+    second = stock.search_tickers("nvda")
+
+    now["value"] += stock._SEARCH_CACHE_TTL + 1
+    third = stock.search_tickers("nvda")
+
+    assert first == [{"ticker": "NVDA", "companyName": "NVIDIA"}]
+    assert second == first
+    assert third == first
+    assert calls["count"] == 2
+
+
+def test_search_tickers_caches_empty_results_after_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    stock._search_cache.clear()
+    calls = {"count": 0}
+
+    def broken_search(*_args, **_kwargs):
+        calls["count"] += 1
+        raise RuntimeError("search broken")
+
+    monkeypatch.setattr(stock.yf, "Search", broken_search)
+    monkeypatch.setattr(stock, "time", lambda: 1000.0)
+
+    first = stock.search_tickers("broken")
+    second = stock.search_tickers("broken")
+
+    assert first == []
+    assert second == []
+    assert calls["count"] == 1

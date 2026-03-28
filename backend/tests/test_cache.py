@@ -6,6 +6,27 @@ import pytest
 from app import cache
 
 
+def test_l1_set_evicts_oldest_and_l1_get_moves_to_end(monkeypatch) -> None:
+    original_max = cache._L1_MAX_SIZE
+    original_cache = cache._l1_cache.copy()
+    try:
+        monkeypatch.setattr(cache, "_L1_MAX_SIZE", 2)
+        cache._l1_cache.clear()
+
+        cache._l1_set("a", 1)
+        cache._l1_set("b", 2)
+        hit, value = cache._l1_get("a")
+        assert hit is True
+        assert value == 1
+
+        cache._l1_set("c", 3)
+        assert list(cache._l1_cache.keys()) == ["a", "c"]
+    finally:
+        cache._l1_cache.clear()
+        cache._l1_cache.update(original_cache)
+        monkeypatch.setattr(cache, "_L1_MAX_SIZE", original_max)
+
+
 def test_local_set_and_get_roundtrip(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(cache, "LOCAL_CACHE_DIR", tmp_path)
 
@@ -53,6 +74,20 @@ def test_get_and_set_dispatch_to_local_backend(tmp_path, monkeypatch) -> None:
 
     cache.set("k3", {"c": 3})
     assert cache.get("k3") == {"c": 3}
+
+
+def test_get_backend_miss_does_not_populate_l1(monkeypatch) -> None:
+    original_cache = cache._l1_cache.copy()
+    try:
+        cache._l1_cache.clear()
+        monkeypatch.setattr(cache, "CACHE_BACKEND", "local")
+        monkeypatch.setattr(cache, "_local_get", lambda key: None)
+
+        assert cache.get("missing") is None
+        assert "missing" not in cache._l1_cache
+    finally:
+        cache._l1_cache.clear()
+        cache._l1_cache.update(original_cache)
 
 
 def test_s3_client_builds_boto3_client() -> None:
@@ -169,6 +204,15 @@ def test_redis_client_uses_from_url() -> None:
             sys.modules["redis"] = original
 
     assert calls == [(cache.REDIS_URL, True)]
+
+
+def test_get_pool_reuses_existing_pool(monkeypatch) -> None:
+    original_pool = cache._redis_pool
+    cache._redis_pool = "existing-pool"
+    try:
+        assert cache._get_pool() == "existing-pool"
+    finally:
+        cache._redis_pool = original_pool
 
 
 def test_redis_set_without_ttl_and_error_paths(monkeypatch) -> None:

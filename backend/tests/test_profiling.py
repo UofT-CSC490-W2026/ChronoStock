@@ -9,6 +9,13 @@ import pytest
 from app import profiling
 
 
+def test_get_auth_header_returns_empty_without_credentials(monkeypatch) -> None:
+    monkeypatch.delenv("AUTH_EMAIL", raising=False)
+    monkeypatch.delenv("AUTH_PASSWORD", raising=False)
+
+    assert profiling._get_auth_header(SimpleNamespace()) == {}
+
+
 def test_main_profiles_server_and_writes_report(monkeypatch, tmp_path) -> None:
     report_path = tmp_path / "report.txt"
     calls = {"print_stats": None, "requests": []}

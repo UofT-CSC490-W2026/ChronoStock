@@ -383,6 +383,69 @@ def test_indicator_history_returns_cached_payload_with_naive_timestamp(monkeypat
     assert resp.json()["cachedAt"] == cached["cachedAt"]
 
 
+def test_indicator_history_fetches_when_cache_has_no_timestamp(monkeypatch) -> None:
+    saved = {}
+    history = IndicatorHistory(
+        name="Known",
+        unit="%",
+        data=[IndicatorDataPoint(time="2026-01-01", value=2.5)],
+        cachedAt=_now_iso(),
+    )
+    monkeypatch.setattr(main.cache, "get", lambda key: {"name": "Known", "unit": "%", "data": []} if key == "indicator:known" else None)
+    monkeypatch.setattr(main.cache, "set", lambda key, value: saved.update({"key": key, "value": value}))
+    monkeypatch.setitem(
+        sys.modules,
+        "app.macro",
+        SimpleNamespace(
+            fetch_indicator_history=lambda name: history,
+            INDICATOR_MAP={"Known": ("fred_level", "X", "%")},
+        ),
+    )
+
+    with _client(monkeypatch) as client:
+        resp = client.get("/api/indicator/Known")
+
+    assert resp.status_code == 200
+    assert saved["key"] == "indicator:known"
+    assert resp.json()["data"][0]["value"] == 2.5
+
+
+def test_indicator_history_refetches_when_naive_cache_is_stale(monkeypatch) -> None:
+    saved = {}
+    history = IndicatorHistory(
+        name="Known",
+        unit="%",
+        data=[IndicatorDataPoint(time="2026-01-01", value=3.5)],
+        cachedAt=_now_iso(),
+    )
+    monkeypatch.setattr(
+        main.cache,
+        "get",
+        lambda key: {
+            "name": "Known",
+            "unit": "%",
+            "data": [{"time": "2020-01-01", "value": 1.0}],
+            "cachedAt": "2000-01-01T00:00:00",
+        } if key == "indicator:known" else None,
+    )
+    monkeypatch.setattr(main.cache, "set", lambda key, value: saved.update({"key": key, "value": value}))
+    monkeypatch.setitem(
+        sys.modules,
+        "app.macro",
+        SimpleNamespace(
+            fetch_indicator_history=lambda name: history,
+            INDICATOR_MAP={"Known": ("fred_level", "X", "%")},
+        ),
+    )
+
+    with _client(monkeypatch) as client:
+        resp = client.get("/api/indicator/Known")
+
+    assert resp.status_code == 200
+    assert saved["key"] == "indicator:known"
+    assert resp.json()["data"][0]["value"] == 3.5
+
+
 def test_trending_skips_non_dict_price_entries(monkeypatch) -> None:
     monkeypatch.setattr(main.cache, "get", lambda _key: None)
 
@@ -487,6 +550,85 @@ def test_market_analysis_returns_cached_payload_with_naive_generated_at(monkeypa
 
     assert resp.status_code == 200
     assert resp.json()["generatedAt"] == cached["generatedAt"]
+
+
+def test_market_analysis_generates_when_cached_payload_has_no_timestamp(monkeypatch) -> None:
+    saved = {}
+    analysis = MarketAnalysis(
+        regime="regime",
+        regimeSentiment="neutral",
+        summary="sum",
+        narrative="nar",
+        keyDrivers=[],
+        historicalContext="hist",
+        watchlist=[],
+        generatedAt=_now_iso(),
+    )
+
+    def fake_cache_get(key):
+        if key == "market:analysis":
+            return {"regime": "old", "summary": "old"}
+        if key == "market:summary":
+            return {"categories": [], "cachedAt": _now_iso()}
+        return None
+
+    monkeypatch.setattr(main.cache, "get", fake_cache_get)
+    monkeypatch.setattr(main.cache, "set", lambda key, value: saved.update({"key": key, "value": value}))
+    monkeypatch.setitem(sys.modules, "app.analysis", SimpleNamespace(generate_market_analysis=lambda summary: analysis))
+    main.app.dependency_overrides[main.get_current_user] = lambda: {"sub": "u1", "email": "u1@example.com"}
+    try:
+        with _client(monkeypatch) as client:
+            resp = client.get("/api/market-analysis")
+    finally:
+        main.app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    assert saved["key"] == "market:analysis"
+    assert resp.json()["regime"] == "regime"
+
+
+def test_market_analysis_refetches_when_naive_cached_payload_is_stale(monkeypatch) -> None:
+    saved = {}
+    analysis = MarketAnalysis(
+        regime="regime",
+        regimeSentiment="neutral",
+        summary="sum",
+        narrative="nar",
+        keyDrivers=[],
+        historicalContext="hist",
+        watchlist=[],
+        generatedAt=_now_iso(),
+    )
+
+    def fake_cache_get(key):
+        if key == "market:analysis":
+            return {
+                "regime": "old",
+                "regimeSentiment": "bearish",
+                "summary": "old",
+                "narrative": "old",
+                "keyDrivers": [],
+                "historicalContext": "old",
+                "watchlist": [],
+                "generatedAt": "2000-01-01T00:00:00",
+            }
+        if key == "market:summary":
+            return {"categories": [], "cachedAt": _now_iso()}
+        return None
+
+    monkeypatch.setattr(main.cache, "get", fake_cache_get)
+    monkeypatch.setattr(main.cache, "set", lambda key, value: saved.update({"key": key, "value": value}))
+    monkeypatch.setitem(sys.modules, "app.analysis", SimpleNamespace(generate_market_analysis=lambda summary: analysis))
+    main.app.dependency_overrides[main.get_current_user] = lambda: {"sub": "u1", "email": "u1@example.com"}
+    try:
+        with _client(monkeypatch) as client:
+            resp = client.get("/api/market-analysis")
+    finally:
+        main.app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    assert saved["key"] == "market:analysis"
+    assert resp.json()["summary"] == "sum"
 
 
 def test_market_analysis_uses_cached_summary_and_generates(monkeypatch) -> None:

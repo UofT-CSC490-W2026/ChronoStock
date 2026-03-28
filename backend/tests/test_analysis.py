@@ -96,6 +96,7 @@ def test_generate_market_analysis_raises_when_bedrock_truncates(monkeypatch) -> 
                 "output": {"message": {"content": [{"text": "{}"}]}},
             }
 
+    monkeypatch.setattr(analysis, "_bedrock_client", None)
     monkeypatch.setattr(analysis.boto3, "client", lambda service, region_name: FakeClient())
 
     with pytest.raises(RuntimeError, match="truncated"):

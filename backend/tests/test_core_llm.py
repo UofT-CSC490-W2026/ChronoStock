@@ -130,6 +130,24 @@ def test_call_llm_with_retries_raises_after_last_attempt() -> None:
     assert calls["count"] == 3
 
 
+def test_run_skips_failed_batch_after_all_retries(capsys: pytest.CaptureFixture[str]) -> None:
+    df = _make_events_df().head(2)
+
+    def always_fail(_prompt: str):
+        raise RuntimeError("persistent llm error")
+
+    filter_pipeline = llm.NewsLLMFilter(llm=always_fail, batch_size=10, max_retries=3)
+
+    selected = filter_pipeline.run(df)
+
+    assert selected == []
+    output = capsys.readouterr().out
+    assert "Retrying failed batch 1/1 (attempt 2/3)" in output
+    assert "Retrying failed batch 1/1 (attempt 3/3)" in output
+    assert "Skipping failed batch 1/1: persistent llm error" in output
+    assert "LLM filtering skipped 1 failed batch(es)." in output
+
+
 def test_load_events_validates_required_columns(tmp_path) -> None:
     csv_path = tmp_path / "bad.csv"
     csv_path.write_text("id,event_date\n1,2026-01-01\n", encoding="utf-8")
@@ -150,6 +168,20 @@ def test_load_events_drops_invalid_rows_and_sorts(tmp_path) -> None:
 
     df = llm.load_events(csv_path)
     assert list(df["id"]) == ["x3", "x2"]
+
+
+def test_load_events_drops_missing_id_values(tmp_path) -> None:
+    csv_path = tmp_path / "events.csv"
+    csv_path.write_text(
+        "id,event_date,published_utc,title,description,abs_car\n"
+        ",2026-01-02,2026-01-02T10:00:00Z,t,d,1\n"
+        "x1,2026-01-01,2026-01-01T10:00:00Z,t,d,1\n",
+        encoding="utf-8",
+    )
+
+    df = llm.load_events(csv_path)
+
+    assert list(df["id"]) == ["x1"]
 
 
 def test_build_llm_from_args_uses_env_and_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -227,6 +259,11 @@ def test_format_news_block_and_parse_args(monkeypatch: pytest.MonkeyPatch) -> No
     assert args.batch_size == 7
 
 
+def test_resolve_default_output_uses_input_basename() -> None:
+    output = llm.resolve_default_output("/tmp/NVDA_events.csv", "/tmp/out")
+    assert output.endswith("NVDA_events.csv")
+
+
 def test_main_filters_and_writes_output(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     input_path = tmp_path / "events.csv"
     output_dir = tmp_path / "out"
@@ -272,6 +309,58 @@ def test_main_filters_and_writes_output(monkeypatch: pytest.MonkeyPatch, tmp_pat
     saved = pd.read_csv(output_dir / "events.csv")
     assert list(saved["id"]) == ["a1"]
     assert any("Selected news: 1" in line for line in printed)
+
+
+def test_main_writes_empty_filtered_file(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    input_path = tmp_path / "events.csv"
+    output_dir = tmp_path / "out"
+    df = pd.DataFrame(
+        [
+            {
+                "id": "a1",
+                "event_date": pd.Timestamp("2026-01-02"),
+                "published_utc": pd.Timestamp("2026-01-02"),
+                "title": "t1",
+                "description": "d1",
+                "abs_car": 1.0,
+            }
+        ]
+    )
+    printed = []
+    monkeypatch.setattr(
+        llm,
+        "parse_args",
+        lambda: SimpleNamespace(
+            input_path=str(input_path),
+            output_dir=str(output_dir),
+            api_key="key",
+            model="m",
+            base_url=None,
+            max_tokens=10,
+            temperature=0.0,
+            batch_size=2,
+            start_date=None,
+            end_date=None,
+        ),
+    )
+    monkeypatch.setattr(llm, "load_events", lambda path: df)
+    monkeypatch.setattr(llm, "build_llm_from_args", lambda args: "fake-llm")
+
+    class FakeFilter:
+        def __init__(self, llm_obj, batch_size):
+            pass
+
+        def run(self, df_arg, start_date=None, end_date=None):
+            return []
+
+    monkeypatch.setattr(llm, "NewsLLMFilter", FakeFilter)
+    monkeypatch.setattr("builtins.print", lambda *args, **kwargs: printed.append(" ".join(str(a) for a in args)))
+
+    llm.main()
+
+    saved = pd.read_csv(output_dir / "events.csv")
+    assert saved.empty
+    assert any("Selected news: 0" in line for line in printed)
 
 
 def test_real_main_block_invokes_main(monkeypatch: pytest.MonkeyPatch) -> None:
