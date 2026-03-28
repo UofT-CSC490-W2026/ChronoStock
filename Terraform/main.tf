@@ -175,6 +175,10 @@ module "ec2" {
   tags = {
     Name = "stock-pipeline-app"
   }
+
+  depends_on = [
+    module.secrets
+  ]
 }
 
 # ----------------------
