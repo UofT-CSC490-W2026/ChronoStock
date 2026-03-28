@@ -171,6 +171,8 @@ Fill in the placeholder values before running Terraform:
 
 Do not commit populated `dev.tfvars` or `prod.tfvars` files.
 
+For `frontend_url`, use your expected deployed frontend origin if you already know it. If not, use a temporary placeholder and update `/home/ec2-user/backend.env` after the frontend is deployed.
+
 ### 2. Apply the infrastructure
 
 ```bash
@@ -206,15 +208,19 @@ During instance startup, the EC2 `user_data` script:
 
 The monthly event pipeline reads the ticker list from `monthly_event_tickers` in your tfvars file.
 
+The bootstrap process also installs `/home/ec2-user/run_full_event_pipeline.sh` for a full reproducible pipeline run. That helper script refreshes benchmark price history, runs data ingestion, runs data cleaning, and then executes the event pipeline to generate model outputs from the prepared initial data.
+
 ### 5. HTTPS setup
 
 The instance includes a helper script at `/home/ec2-user/setup_https.sh` that installs nginx and certbot, validates nginx config, reloads nginx, and requests a certificate using `certbot_email`.
 
-If you use this script:
+Only run this script after you have obtained a domain/subdomain for the backend and pointed its DNS record to the EC2 public IP.
 
-- Point your domain DNS to the EC2 public IP first
+Before running the script:
+
 - Verify the domain configured in the script matches your deployment domain
-- Run the script manually after the instance is reachable
+- Wait for DNS propagation to complete
+- Ensure the instance is reachable
 
 ### 6. Frontend deployment
 
@@ -224,7 +230,8 @@ Required Vercel environment variables:
 
 ```env
 NEXT_PUBLIC_MOCK_AUTH=false
-NEXT_PUBLIC_API_URL=https://api.chronostock.shop
+# Set this after your backend HTTPS domain is ready.
+NEXT_PUBLIC_API_URL=
 ```
 
 Recommended Vercel project settings:
@@ -238,8 +245,11 @@ Deployment flow:
 
 1. Import the repository into Vercel
 2. Set the root directory to `frontend`
-3. Add the environment variables above
+3. Add the environment variables above; you can leave `NEXT_PUBLIC_API_URL` empty until your backend HTTPS domain is ready
 4. Deploy the project
+5. After the frontend is deployed, update `/home/ec2-user/backend.env` on the EC2 instance so `FRONTEND_URL` matches the deployed frontend URL
+6. Rerun `/home/ec2-user/run_backend.sh` so the backend picks up the new CORS origin
+7. Once your backend domain is available, set `NEXT_PUBLIC_API_URL` in Vercel to that backend HTTPS URL and redeploy the frontend
 
 - Frontend app: https://chrono-stock2.vercel.app/
 
@@ -257,12 +267,17 @@ The custom domain is required for the hosted frontend:
 - Browsers block mixed-content requests from an HTTPS frontend to an HTTP backend
 - Backend CORS depends on the deployed frontend origin configured in `frontend_url`
 
+If you deploy your own backend, you must first obtain a domain name or subdomain for it.
+
 To connect a deployed frontend to your own backend:
 
-1. Point your backend domain DNS record at the EC2 public IP
-2. Ensure the nginx/certbot helper script is configured for that domain
-3. Run `/home/ec2-user/setup_https.sh` after DNS propagation
-4. Set `NEXT_PUBLIC_API_URL` in Vercel to your backend HTTPS URL
+1. Obtain a domain/subdomain for your backend
+2. Point your backend domain DNS record at the EC2 public IP
+3. Wait for that DNS record to propagate to the EC2 public IP
+4. Ensure the nginx/certbot helper script is configured for that domain
+5. Run `/home/ec2-user/setup_https.sh` only after DNS propagation is complete
+6. Set `NEXT_PUBLIC_API_URL` in Vercel to that backend HTTPS domain
+7. If `/home/ec2-user/backend.env` still has a placeholder `FRONTEND_URL`, update it to the deployed frontend URL and rerun `/home/ec2-user/run_backend.sh`
 
 For local development, the frontend can call `http://localhost:8000` instead of the deployed API.
 
@@ -272,55 +287,55 @@ For local development, the frontend can call `http://localhost:8000` instead of 
 
 ```text
 ChronoStock/
-|- .github/
-|  \- workflows/
-|- backend/
-|  |- app/
-|  |  |- analysis.py
-|  |  |- auth.py
-|  |  |- benchmark.py
-|  |  |- cache.py
-|  |  |- database.py
-|  |  |- demo_events.py
-|  |  |- edgar.py
-|  |  |- macro.py
-|  |  |- main.py
-|  |  |- models.py
-|  |  |- profiling.py
-|  |  |- stock.py
-|  |  \- pipelines/
-|  |     |- core/
-|  |     |  |- car.py
-|  |     |  |- event_detection.py
-|  |     |  \- llm.py
-|  |     |- data_cleaning.py
-|  |     |- data_ingestion.py
-|  |     |- run_daily_update.py
-|  |     |- run_event_pipeline.py
-|  |     |- run_hourly_update.py
-|  |     |- run_monthly_event_pipeline.py
-|  |     \- run_s3_event_pipeline.py
-|  |- cache/
-|  |- data/
-|  |- demodata/
-|  |- tests/
-|  |- Dockerfile
-|  |- pytest.ini
-|  \- requirements.txt
-|- frontend/
-|  |- __mocks__/
-|  |- __tests__/
-|  |- app/
-|  |- components/
-|  |- contexts/
-|  |- lib/
-|  |- public/
-|  |- types/
-|  |- jest.config.ts
-|  \- package.json
-|- scripts/
-|- Terraform/
-\- README.md
+|- backend/                  FastAPI backend, data pipeline jobs, tests, and container setup.
+|  |- app/                   Main backend package.
+|  |  |- main.py             API entrypoint with routes, CORS, auth flows, and startup logic.
+|  |  |- models.py           Shared request/response schemas.
+|  |  |- stock.py            Stock price, company metadata, news, and earnings helpers.
+|  |  |- auth.py             Password hashing and JWT utilities.
+|  |  |- database.py         Database connection and initialization helpers.
+|  |  |- edgar.py            SEC filing retrieval logic.
+|  |  |- macro.py            Macro indicator collection and formatting.
+|  |  \- pipelines/          Batch jobs for ingestion, cleaning, and event generation.
+|  |     |- data_ingestion.py             Pulls raw market and news data.
+|  |     |- data_cleaning.py              Cleans/filter news before modeling.
+|  |     |- run_daily_update.py           Daily refresh for cached stock data.
+|  |     |- run_hourly_update.py          Hourly price refresh job.
+|  |     |- run_monthly_event_pipeline.py Monthly S3-backed incremental pipeline.
+|  |     |- run_s3_event_pipeline.py      Per-ticker event generation from prepared data.
+|  |     \- core/                         Core CAR, event detection, and LLM logic.
+|  |- demodata/              Sample data for demos and tests.
+|  |- depth_test/            Experimental event-detection tests.
+|  |- scripts/               Backend helper scripts.
+|  |- tests/                 Backend pytest suite.
+|  |- Dockerfile             Backend image definition.
+|  \- requirements.txt       Python dependency list.
+|- frontend/                 Next.js frontend deployed on Vercel.
+|  |- app/                   App Router pages.
+|  |  |- page.tsx            Landing page with search and trending tickers.
+|  |  |- stock/              Stock details and stock news pages.
+|  |  |- market/             Market overview page.
+|  |  |- compare/            Multi-stock comparison page.
+|  |  |- watchlist/          User watchlist page.
+|  |  |- login/ signup/ forgot-password/ reset-password/  Auth-related routes.
+|  |  \- layout.tsx          Shared frontend layout.
+|  |- components/            Reusable charts and UI components.
+|  |- contexts/              React auth context.
+|  |- lib/                   API client and frontend integration helpers.
+|  |- data/                  Mock/frontend seed data.
+|  |- __tests__/             Frontend Jest tests.
+|  |- package.json           Frontend scripts and dependencies.
+|  \- next.config.ts         Next.js configuration.
+|- Terraform/                AWS infrastructure for EC2, RDS, S3, secrets, and schedulers.
+|  |- main.tf                Top-level infrastructure composition.
+|  |- variables.tf           Deployment inputs such as URLs, secrets, and ticker lists.
+|  |- outputs.tf             Exported deployment values.
+|  |- modules/               Reusable Terraform modules.
+|  \- bootstrap/             Backend resources for Terraform state bootstrap.
+|- scripts/                  Repository-level helper scripts.
+|- assignments/              Course assignment snapshots kept in the repo.
+|- tests/                    Additional top-level tests.
+\- README.md                 Project setup, deployment, and usage guide.
 ```
 
 ---
