@@ -49,13 +49,16 @@ module "secrets" {
 
   secret_name = var.secret_name
 
-  db_username     = var.db_username
-  db_password     = var.db_password
-  db_host         = module.rds.db_host
-  db_name         = var.db_name
-  polygon_api_key = var.polygon_api_key
-  llm_api_key     = var.llm_api_key
-  jwt_secret_key  = var.jwt_secret_key
+  db_username                = var.db_username
+  db_password                = var.db_password
+  db_host                    = module.rds.db_host
+  db_name                    = var.db_name
+  polygon_api_key            = var.polygon_api_key
+  llm_api_key                = var.llm_api_key
+  fred_api_key               = var.fred_api_key
+  aws_bearer_token_bedrock   = var.aws_bearer_token_bedrock
+  bedrock_model_id           = var.bedrock_model_id
+  jwt_secret_key             = var.jwt_secret_key
 }
 
 resource "aws_iam_policy" "secrets_policy" {

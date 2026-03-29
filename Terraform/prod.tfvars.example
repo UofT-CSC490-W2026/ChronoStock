@@ -12,6 +12,9 @@ pipeline_source_bucket_name = "your-unique-chronostock-prod-source-bucket"
 
 polygon_api_key = "replace-with-your-polygon-api-key"
 llm_api_key     = "replace-with-your-llm-api-key"
+fred_api_key    = "replace-with-your-fred-api-key"
+aws_bearer_token_bedrock = "replace-with-your-bedrock-api-key"
+bedrock_model_id         = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 llm_model       = "deepseek-chat"
 llm_base_url    = "https://api.deepseek.com"
 

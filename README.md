@@ -163,6 +163,9 @@ Fill in the placeholder values before running Terraform:
 - `pipeline_source_bucket_name`
 - `polygon_api_key`
 - `llm_api_key`
+- `fred_api_key`
+- `aws_bearer_token_bedrock`
+- `bedrock_model_id`
 - `jwt_secret_key`
 - `secret_name`
 - `frontend_url`
@@ -205,6 +208,8 @@ During instance startup, the EC2 `user_data` script:
 - Writes `/home/ec2-user/backend.env`
 - Starts the backend container on port `8000`
 - Installs helper scripts for daily, hourly, and monthly pipeline runs
+
+The generated `/home/ec2-user/backend.env` includes both pipeline settings (`LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`) and the runtime keys required by the market overview endpoints (`FRED_API_KEY`, `AWS_BEARER_TOKEN_BEDROCK`, `BEDROCK_MODEL_ID`).
 
 The monthly event pipeline reads the ticker list from `monthly_event_tickers` in your tfvars file.
 

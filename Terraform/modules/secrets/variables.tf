@@ -10,6 +10,13 @@ variable "polygon_api_key" {
 variable "llm_api_key" {
   sensitive = true
 }
+variable "fred_api_key" {
+  sensitive = true
+}
+variable "aws_bearer_token_bedrock" {
+  sensitive = true
+}
+variable "bedrock_model_id" {}
 variable "jwt_secret_key" {
   sensitive = true
 }

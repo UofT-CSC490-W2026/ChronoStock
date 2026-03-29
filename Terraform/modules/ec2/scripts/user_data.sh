@@ -45,6 +45,9 @@ DB_PORT=$(echo "$SECRET_JSON" | jq -r '.port')
 JWT_SECRET=$(echo "$SECRET_JSON" | jq -r '.jwt_secret_key')
 POLYGON_API_KEY=$(echo "$SECRET_JSON" | jq -r '.polygon_api_key')
 LLM_API_KEY=$(echo "$SECRET_JSON" | jq -r '.llm_api_key')
+FRED_API_KEY=$(echo "$SECRET_JSON" | jq -r '.fred_api_key')
+AWS_BEARER_TOKEN_BEDROCK=$(echo "$SECRET_JSON" | jq -r '.aws_bearer_token_bedrock')
+BEDROCK_MODEL_ID=$(echo "$SECRET_JSON" | jq -r '.bedrock_model_id')
 
 DATABASE_URL="postgresql://$DB_USER:$DB_PASS@$DB_HOST:$DB_PORT/$DB_NAME"
 
@@ -58,6 +61,9 @@ PIPELINE_S3_BUCKET=${bucket_name}
 AWS_REGION=${aws_region}
 POLYGON_API_KEY=$POLYGON_API_KEY
 LLM_API_KEY=$LLM_API_KEY
+FRED_API_KEY=$FRED_API_KEY
+AWS_BEARER_TOKEN_BEDROCK=$AWS_BEARER_TOKEN_BEDROCK
+BEDROCK_MODEL_ID=$BEDROCK_MODEL_ID
 LLM_MODEL=${llm_model}
 LLM_BASE_URL=${llm_base_url}
 MONTHLY_EVENT_TICKERS=${monthly_event_tickers}

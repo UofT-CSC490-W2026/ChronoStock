@@ -37,6 +37,24 @@ variable "llm_api_key" {
   sensitive   = true
 }
 
+variable "fred_api_key" {
+  description = "FRED API key used by macro endpoints"
+  type        = string
+  sensitive   = true
+}
+
+variable "aws_bearer_token_bedrock" {
+  description = "AWS Bedrock API key used by market analysis"
+  type        = string
+  sensitive   = true
+}
+
+variable "bedrock_model_id" {
+  description = "Bedrock model or inference profile ID used by market analysis"
+  type        = string
+  default     = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+}
+
 variable "llm_model" {
   description = "LLM model used by the monthly event pipeline"
   type        = string
