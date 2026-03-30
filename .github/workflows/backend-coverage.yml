@@ -2,11 +2,6 @@ name: Backend Coverage
 
 on:
   pull_request:
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend-coverage.yml"
-      - "scripts/update-readme-backend-coverage.mjs"
-      - "README.md"
   push:
     branches:
       - main
