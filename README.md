@@ -502,7 +502,7 @@ _This section reports frontend Jest coverage and is updated automatically by Git
 <!-- coverage:end -->
 
 <!-- backend-coverage:start -->
-### Backend Test Coverage
+## Backend Test Coverage
 
 ![Backend Coverage](https://img.shields.io/badge/backend%20coverage-99.17%25-brightgreen)
 
