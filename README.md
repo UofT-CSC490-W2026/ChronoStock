@@ -45,29 +45,7 @@ AI-powered market intelligence that transforms stock charts into explorable narr
 
 ## Architecture Overview
 
-```
-                           +------------------+
-                           |   Vercel (HTTPS) |
-                           |   Next.js 15     |
-                           +--------+---------+
-                                    |
-                               REST API
-                                    |
-                   +----------------v-----------------+
-                   |       AWS EC2 (Docker)           |
-                   |       FastAPI Backend             |
-                   |  +-----------+-----------+       |
-                   |  | REST API  | Pipelines |       |
-                   |  +-----------+-----------+       |
-                   +---+-------+-------+------+-------+
-                       |       |       |      |
-              +--------+  +----+  +----+  +---+--------+
-              |           |       |       |            |
-         RDS Postgres   S3    yfinance  FRED API   AWS Bedrock
-         (users,       (cache, (market  (macro      (AI narrative,
-          watchlists,   pipeline data)  indicators)  event analysis)
-          events)       data)
-```
+![ChronoStock architecture overview](docs/architecture-overview.png)
 
 **Event Detection Pipeline:** The core intelligence layer detects significant stock price movements using change-point detection (ruptures), computes Cumulative Abnormal Returns (CAR) via a market model regression, and uses LLM-based news filtering to match events to their real-world causes. Pipelines run on automated schedules via AWS EventBridge (daily, hourly, monthly).
 
