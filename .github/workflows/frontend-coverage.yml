@@ -201,5 +201,6 @@ jobs:
           if ! git diff --quiet -- ../README.md; then
             git add ../README.md
             git commit -m "chore: update coverage badge [skip ci]"
+            git pull --rebase origin ${GITHUB_REF_NAME}
             git push origin HEAD:${GITHUB_REF_NAME}
           fi
