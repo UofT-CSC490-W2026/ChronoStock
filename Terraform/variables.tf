@@ -9,8 +9,44 @@ variable "key_name" {
   type        = string
 }
 
+variable "ec2_instance_type" {
+  description = "EC2 instance type for the backend host"
+  type        = string
+  default     = "t2.micro"
+}
+
+variable "ec2_root_volume_size" {
+  description = "EC2 root volume size in GB"
+  type        = number
+  default     = 8
+}
+
+variable "ec2_root_volume_type" {
+  description = "EC2 root volume type"
+  type        = string
+  default     = "gp3"
+}
+
+variable "ec2_root_volume_encrypted" {
+  description = "Whether the EC2 root volume is encrypted"
+  type        = bool
+  default     = true
+}
+
 variable "db_name" {
   type = string
+}
+
+variable "db_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "db_allocated_storage" {
+  description = "RDS allocated storage in GB"
+  type        = number
+  default     = 20
 }
 
 variable "bucket_name" {

@@ -155,8 +155,14 @@ resource "aws_iam_role_policy" "scheduler_ssm" {
 module "ec2" {
   source = "./modules/ec2"
 
-  ami      = data.aws_ami.amazon_linux.id
-  key_name = var.key_name
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = var.ec2_instance_type
+  key_name      = var.key_name
+  root_block = {
+    size      = var.ec2_root_volume_size
+    type      = var.ec2_root_volume_type
+    encrypted = var.ec2_root_volume_encrypted
+  }
 
   public_subnet_id   = module.vpc.public_subnet_ids[0]
   security_group_ids = [module.security_group.ec2_sg_id]
@@ -193,9 +199,11 @@ module "rds" {
   rds_sg_id          = module.security_group.rds_sg_id
   private_subnet_ids = module.vpc.private_subnet_ids
 
-  db_username = var.db_username
-  db_password = var.db_password
-  db_name     = var.db_name
+  db_instance_class    = var.db_instance_class
+  db_allocated_storage = var.db_allocated_storage
+  db_username          = var.db_username
+  db_password          = var.db_password
+  db_name              = var.db_name
 }
 
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {

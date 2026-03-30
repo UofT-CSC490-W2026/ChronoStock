@@ -336,11 +336,15 @@ The EC2 `user_data` script automatically:
 3. Pulls and starts the backend Docker container
 4. Installs helper scripts for pipeline execution
 
-The bootstrap also installs `/home/ec2-user/run_full_event_pipeline.sh` for a **full reproducible pipeline run**. This script refreshes benchmark price history, runs data ingestion, runs data cleaning, and executes the event pipeline to generate model outputs from prepared data.
+The bootstrap process also installs `/home/ec2-user/run_full_event_pipeline.sh` for a **full, reproducible pipeline run**. This script refreshes benchmark price history, runs data ingestion, runs data cleaning, and then executes the event pipeline to generate model outputs from the prepared data. You need to run this script manually at least once to generate and inspect the detected event results.
 
 ### HTTPS setup
 
-After pointing a domain's DNS to the EC2 public IP:
+Before running HTTPS setup:
+
+1. Prepare a domain or subdomain for the backend (for example, `api.yourdomain.com`)
+2. Point that domain's DNS record to the EC2 public IP
+3. Wait for DNS propagation to complete
 
 ```bash
 # On the EC2 instance, after DNS propagation
@@ -357,14 +361,35 @@ See `dev.tfvars.example` for the full template. Key variables:
 |---|---|
 | `key_name` | AWS EC2 key pair name |
 | `db_password` | PostgreSQL password |
-| `bucket_name` | S3 cache bucket |
+| `db_name` | PostgreSQL database name |
+| `db_username` | PostgreSQL username |
+| `bucket_name` | S3 cache and pipeline data bucket |
+| `pipeline_source_bucket_name` | Additional S3 bucket for pipeline source data |
+| `polygon_api_key` | Polygon market/news API key |
 | `jwt_secret_key` | Backend JWT secret |
+| `secret_name` | AWS Secrets Manager secret name |
 | `frontend_url` | Deployed frontend origin (CORS) |
 | `llm_api_key` | LLM API key (DeepSeek) |
+| `llm_model` | LLM model used by the monthly event pipeline |
+| `llm_base_url` | OpenAI-compatible base URL for the LLM provider |
 | `fred_api_key` | FRED macroeconomic data |
 | `aws_bearer_token_bedrock` | AWS Bedrock API key |
+| `bedrock_model_id` | AWS Bedrock model or inference profile ID |
 | `monthly_event_tickers` | Tickers for monthly event pipeline |
 | `certbot_email` | Email for HTTPS certificate |
+
+### Optional tfvars
+
+See `prod.tfvars.example` for optional infrastructure sizing overrides. These variables let you change the EC2 and RDS deployment configuration:
+
+| Variable | Purpose |
+|---|---|
+| `ec2_instance_type` | EC2 instance type for the backend host |
+| `ec2_root_volume_size` | EC2 root volume size in GB |
+| `ec2_root_volume_type` | EC2 root volume type |
+| `ec2_root_volume_encrypted` | Whether the EC2 root volume is encrypted |
+| `db_instance_class` | RDS instance class |
+| `db_allocated_storage` | RDS allocated storage in GB |
 
 Do not commit populated `dev.tfvars` or `prod.tfvars` files.
 
