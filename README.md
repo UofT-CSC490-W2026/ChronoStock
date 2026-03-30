@@ -487,7 +487,7 @@ ChronoStock/
 ## Test Coverage
 
 <!-- coverage:start -->
-### Frontend Test Coverage
+## Frontend Test Coverage
 
 ![Coverage](https://img.shields.io/badge/coverage-99.08%25-brightgreen)
 
